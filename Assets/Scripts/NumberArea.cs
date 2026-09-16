@@ -12,6 +12,9 @@ public class NumberArea : MonoBehaviour
     [SerializeField] private Vector2 spacing = new Vector2(1f, 1f);
     [SerializeField] private Vector2 firstTokenLocalPosition = Vector2.zero;
     [SerializeField] private CameraSmoothMove cameraMover;
+    [SerializeField] private Vector2 cameraMoveTargetWorldPosition;
+    [SerializeField] private Camera inputCamera;
+    [SerializeField] private Collider2D stampingArea;
 
     private readonly List<NumberToken> spawnedTokens = new List<NumberToken>();
 
@@ -21,12 +24,19 @@ public class NumberArea : MonoBehaviour
         {
             cameraMover = FindFirstObjectByType<CameraSmoothMove>();
         }
+
+        if (inputCamera == null)
+        {
+            inputCamera = cameraMover != null
+                ? cameraMover.GetComponent<Camera>()
+                : Camera.main;
+        }
     }
 
     /// <summary>
     /// Creates and positions one number token. Returns null if no prefab is set.
     /// </summary>
-    public NumberToken SpawnNumber(int value)
+    public NumberToken SpawnNumber(decimal value)
     {
         if (numberPrefab == null)
         {
@@ -51,12 +61,19 @@ public class NumberArea : MonoBehaviour
         NumberToken token = Instantiate(numberPrefab, worldPosition, transform.rotation);
         token.transform.SetParent(transform, true);
         token.SetValue(value);
+
+        NumberTokenDrag drag = token.GetComponent<NumberTokenDrag>();
+        if (drag == null)
+        {
+            drag = token.gameObject.AddComponent<NumberTokenDrag>();
+        }
+
+        drag.Configure(inputCamera, stampingArea);
         spawnedTokens.Add(token);
 
         if (cameraMover != null)
         {
-            Vector3 tokenPosition = token.transform.position;
-            cameraMover.MoveTo(new Vector2(tokenPosition.x, tokenPosition.y));
+            cameraMover.MoveTo(cameraMoveTargetWorldPosition);
         }
 
         Debug.Log($"数字区生成数字：{value}。", token);

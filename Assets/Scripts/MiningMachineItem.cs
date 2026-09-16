@@ -13,6 +13,13 @@ public class MiningMachineItem : MonoBehaviour
     [SerializeField] private Vector2Int footprintSize = Vector2Int.one;
     [SerializeField, Min(0)] private int productionPerCell = 1;
 
+    private MiningMachineWaitingArea homeWaitingArea;
+    private Transform homeParent;
+    private Vector3 homeLocalPosition;
+    private Quaternion homeLocalRotation;
+    private Vector3 homeLocalScale;
+    private bool hasHomePlacement;
+
     private SpriteRenderer[] spriteRenderers;
     private Color[] originalColors;
     private bool visualsCached;
@@ -30,6 +37,39 @@ public class MiningMachineItem : MonoBehaviour
     internal void SetWaitingArea(MiningMachineWaitingArea waitingArea)
     {
         this.waitingArea = waitingArea;
+
+        if (waitingArea != null && !hasHomePlacement)
+        {
+            homeWaitingArea = waitingArea;
+            homeParent = transform.parent;
+            homeLocalPosition = transform.localPosition;
+            homeLocalRotation = transform.localRotation;
+            homeLocalScale = transform.localScale;
+            hasHomePlacement = true;
+        }
+    }
+
+    /// <summary>
+    /// Restores this machine to the transform it had when first registered in
+    /// its waiting area.
+    /// </summary>
+    public bool ReturnToWaitingArea()
+    {
+        if (homeWaitingArea == null || !hasHomePlacement)
+        {
+            return false;
+        }
+
+        transform.SetParent(homeParent != null ? homeParent : homeWaitingArea.transform, false);
+        transform.localPosition = homeLocalPosition;
+        transform.localRotation = homeLocalRotation;
+        transform.localScale = homeLocalScale;
+
+        SetDeploymentLocation(null, default);
+        SetPowered(false);
+        SetSelected(false);
+        homeWaitingArea.RegisterMachine(this);
+        return true;
     }
 
     internal void SetDeploymentLocation(MiningMachineDeploymentArea area, Vector2Int bottomLeftCell)

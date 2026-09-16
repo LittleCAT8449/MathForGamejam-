@@ -9,11 +9,13 @@ public class CameraSmoothMove : MonoBehaviour
     [SerializeField, Min(0.01f)] private float smoothTime = 0.25f;
     private Vector2 targetWorldPosition;
     private Vector2 currentVelocity;
+    private Vector2 initialWorldPosition;
 
     private void Awake()
     {
         Vector3 position = transform.position;
-        targetWorldPosition = new Vector2(position.x, position.y);
+        initialWorldPosition = new Vector2(position.x, position.y);
+        targetWorldPosition = initialWorldPosition;
     }
 
     private void Update()
@@ -35,5 +37,13 @@ public class CameraSmoothMove : MonoBehaviour
     public void MoveTo(Vector2 worldPosition)
     {
         targetWorldPosition = worldPosition;
+    }
+
+    /// <summary>
+    /// Smoothly moves the camera back to the XY position it had when the scene started.
+    /// </summary>
+    public void MoveToInitialPosition()
+    {
+        MoveTo(initialWorldPosition);
     }
 }

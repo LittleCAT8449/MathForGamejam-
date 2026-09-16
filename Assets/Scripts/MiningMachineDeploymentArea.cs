@@ -137,6 +137,28 @@ public class MiningMachineDeploymentArea : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// Frees every occupied cell and restores deployed machines to their
+    /// original waiting-area positions.
+    /// </summary>
+    public void ReturnAllDeployedMachines()
+    {
+        List<MiningMachineItem> deployed = new List<MiningMachineItem>(placements.Keys);
+        foreach (MiningMachineItem machine in deployed)
+        {
+            if (machine == null)
+            {
+                continue;
+            }
+
+            RemoveDeployment(machine);
+            if (!machine.ReturnToWaitingArea())
+            {
+                Debug.LogWarning($"采矿机 {machine.name} 没有记录待选区位置，无法自动返回。", machine);
+            }
+        }
+    }
+
     private List<Vector2Int> GetFootprintCells(Vector2Int bottomLeftCell, Vector2Int footprint)
     {
         List<Vector2Int> cells = new List<Vector2Int>(footprint.x * footprint.y);

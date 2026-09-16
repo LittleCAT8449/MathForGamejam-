@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using System.Globalization;
 
 /// <summary>
 /// Put this component on the number SpriteObject prefab. The value is rendered
@@ -11,7 +12,7 @@ public class NumberToken : MonoBehaviour
     [SerializeField] private TextMeshPro valueLabel;
     [SerializeField] private Color labelColor = Color.black;
 
-    public int Value { get; private set; }
+    public decimal Value { get; private set; }
 
     private SpriteRenderer spriteRenderer;
 
@@ -25,9 +26,17 @@ public class NumberToken : MonoBehaviour
     /// </summary>
     public void SetValue(int value)
     {
+        SetValue((decimal)value);
+    }
+
+    /// <summary>
+    /// Sets the number shown by this token, including fractional results.
+    /// </summary>
+    public void SetValue(decimal value)
+    {
         CacheComponents();
         Value = value;
-        valueLabel.text = value.ToString();
+        valueLabel.text = value.ToString("0.############################", CultureInfo.InvariantCulture);
     }
 
     private void CacheComponents()
