@@ -99,8 +99,19 @@ public class MiningMachineDeploymentArea : MonoBehaviour
         machine.transform.SetParent(grid.transform, true);
         machine.transform.position = snappedPosition;
         Vector3 localScale = machine.transform.localScale;
-        localScale.x = cellScale.x * footprint.x;
-        localScale.y = cellScale.y * footprint.y;
+        // A Tilemap machine already contains one sprite per footprint cell, so
+        // its root scale represents the size of one cell. A single Sprite
+        // machine represents the whole footprint and needs the multiplication.
+        if (machine.HasTilemapShape)
+        {
+            localScale.x = cellScale.x;
+            localScale.y = cellScale.y;
+        }
+        else
+        {
+            localScale.x = cellScale.x * footprint.x;
+            localScale.y = cellScale.y * footprint.y;
+        }
         machine.transform.localScale = localScale;
         machine.SetDeploymentLocation(this, bottomLeftCell);
 

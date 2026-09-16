@@ -9,11 +9,33 @@ using UnityEngine.InputSystem;
 /// </summary>
 public class MiningMachineWaitingArea : MonoBehaviour
 {
+    [Serializable]
+    private class InitialMachineEntry
+    {
+        [SerializeField] private MiningMachineItem prefab;
+        [SerializeField, Min(1)] private int count = 1;
+
+        public MiningMachineItem Prefab => prefab;
+        public int Count => Mathf.Max(1, count);
+    }
+
     [SerializeField] private Camera inputCamera;
     [SerializeField] private LayerMask machineLayerMask = Physics2D.DefaultRaycastLayers;
     [SerializeField] private List<MiningMachineItem> machines = new List<MiningMachineItem>();
     [SerializeField] private MiningMachineDeploymentArea deploymentArea;
     [SerializeField, Min(0f)] private float dragThresholdPixels = 8f;
+
+    [Header("开局生成")]
+    [SerializeField] private bool spawnInitialMachines = true;
+    [SerializeField] private List<InitialMachineEntry> initialMachines =
+        new List<InitialMachineEntry>();
+    [Tooltip("生成实例的父物体。可指定原来放置 Square 的‘选择物体’；为空时使用待选区域自身。")]
+    [SerializeField] private Transform spawnParent;
+    [SerializeField] private Vector2 initialStartLocalPosition = Vector2.zero;
+    [SerializeField] private Vector2 initialSpacing = new Vector2(1.2f, 1.2f);
+    [SerializeField, Min(1)] private int initialColumns = 4;
+
+    private bool initialMachinesSpawned;
 
     public MiningMachineItem SelectedMachine { get; private set; }
 
@@ -42,6 +64,8 @@ public class MiningMachineWaitingArea : MonoBehaviour
 
     private void Start()
     {
+        SpawnInitialMachines();
+
         if (deploymentArea == null)
         {
             deploymentArea = FindFirstObjectByType<MiningMachineDeploymentArea>();
@@ -110,6 +134,52 @@ public class MiningMachineWaitingArea : MonoBehaviour
         }
 
         machine.SetWaitingArea(this);
+    }
+
+    /// <summary>
+    /// Instantiates the configured machine prefabs as children of this waiting
+    /// area. Each instance is registered through the same path as a manually
+    /// placed machine, so selection, dragging, deployment and reset work the
+    /// same way.
+    /// </summary>
+    private void SpawnInitialMachines()
+    {
+        if (initialMachinesSpawned || !spawnInitialMachines)
+        {
+            return;
+        }
+
+        initialMachinesSpawned = true;
+        int spawnIndex = 0;
+        int columns = Mathf.Max(1, initialColumns);
+        Transform parent = spawnParent != null ? spawnParent : transform;
+
+        foreach (InitialMachineEntry entry in initialMachines)
+        {
+            if (entry == null || entry.Prefab == null)
+            {
+                continue;
+            }
+
+            for (int i = 0; i < entry.Count; i++)
+            {
+                MiningMachineItem machine = Instantiate(entry.Prefab, parent, false);
+                int column = spawnIndex % columns;
+                int row = spawnIndex / columns;
+                machine.transform.localPosition = new Vector3(
+                    initialStartLocalPosition.x + column * initialSpacing.x,
+                    initialStartLocalPosition.y + row * initialSpacing.y,
+                    machine.transform.localPosition.z);
+                machine.name = $"{entry.Prefab.name}_{spawnIndex + 1}";
+                RegisterMachine(machine);
+                spawnIndex++;
+            }
+        }
+
+        if (spawnIndex > 0)
+        {
+            Debug.Log($"{name}：开局生成 {spawnIndex} 台采矿机到待选区。", this);
+        }
     }
 
     /// <summary>

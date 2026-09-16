@@ -158,20 +158,10 @@ public class MiningMachinePowerSystem : MonoBehaviour
 
     private static bool BoundsAreAdjacent(Bounds first, Bounds second, float tolerance)
     {
-        if (first.Intersects(second))
-        {
-            return true;
-        }
-
-        float horizontalOverlap = Mathf.Min(first.max.y, second.max.y) - Mathf.Max(first.min.y, second.min.y);
-        float verticalOverlap = Mathf.Min(first.max.x, second.max.x) - Mathf.Max(first.min.x, second.min.x);
-        bool touchesOnX = Mathf.Abs(first.max.x - second.min.x) <= tolerance ||
-                          Mathf.Abs(second.max.x - first.min.x) <= tolerance;
-        bool touchesOnY = Mathf.Abs(first.max.y - second.min.y) <= tolerance ||
-                          Mathf.Abs(second.max.y - first.min.y) <= tolerance;
-
-        return (touchesOnX && horizontalOverlap > 0f) ||
-               (touchesOnY && verticalOverlap > 0f);
+        // Power connections are 2D; ignore sorting depth differences.
+        float xGap = Mathf.Max(first.min.x - second.max.x, second.min.x - first.max.x);
+        float yGap = Mathf.Max(first.min.y - second.max.y, second.min.y - first.max.y);
+        return xGap <= tolerance && yGap <= tolerance;
     }
 
     private void CacheComponents()
