@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -13,6 +14,13 @@ public class SettlementArea : MonoBehaviour
     [SerializeField] private Camera inputCamera;
 
     private readonly List<NumberToken> placedNumbers = new List<NumberToken>();
+
+    /// <summary>
+    /// Raised after a number has been placed in the settlement area.
+    /// LevelManager uses this to check the current level target.
+    /// </summary>
+    public event Action<NumberToken> NumberPlaced;
+    public IReadOnlyList<NumberToken> PlacedNumbers => placedNumbers;
 
     private void Awake()
     {
@@ -83,6 +91,7 @@ public class SettlementArea : MonoBehaviour
         token.transform.SetParent(transform, true);
         token.transform.position = transform.TransformPoint(localPosition);
         placedNumbers.Add(token);
+        NumberPlaced?.Invoke(token);
         Debug.Log($"结果数字 {token.Value} 已放入结算区。", token);
     }
 

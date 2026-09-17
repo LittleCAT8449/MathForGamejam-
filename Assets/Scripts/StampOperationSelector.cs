@@ -10,12 +10,18 @@ public class StampOperationSelector : MonoBehaviour
 {
     [SerializeField] private StampingMachine stampingMachine;
     [SerializeField] private GameObject uiObjectToClose;
+    [SerializeField] private LevelManager levelManager;
 
     private void Awake()
     {
         if (stampingMachine == null)
         {
             stampingMachine = FindFirstObjectByType<StampingMachine>();
+        }
+
+        if (levelManager == null)
+        {
+            levelManager = FindFirstObjectByType<LevelManager>();
         }
 
         if (uiObjectToClose == null)
@@ -76,6 +82,15 @@ public class StampOperationSelector : MonoBehaviour
         if (stampingMachine == null)
         {
             Debug.LogWarning("无法设置冲压运算：没有找到 StampingMachine。", this);
+            return;
+        }
+
+        if (levelManager != null &&
+            !levelManager.IsOperationAvailable(selectedOperation))
+        {
+            Debug.LogWarning(
+                $"当前关卡还不能使用运算：{GetOperationName(selectedOperation)}。",
+                this);
             return;
         }
 

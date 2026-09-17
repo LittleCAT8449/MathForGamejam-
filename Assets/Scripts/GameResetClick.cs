@@ -91,6 +91,16 @@ public class GameResetClick : MonoBehaviour
         CloseResetConfirmation();
     }
 
+    /// <summary>
+    /// Resets the current round without opening the confirmation prompt. This
+    /// is used by LevelManager after a level has been completed successfully.
+    /// </summary>
+    public void ResetRoundImmediately()
+    {
+        CloseResetConfirmation();
+        PerformResetRound();
+    }
+
     private void PerformResetRound()
     {
         StampingMachine[] presses = FindObjectsByType<StampingMachine>(FindObjectsSortMode.None);

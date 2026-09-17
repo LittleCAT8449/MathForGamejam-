@@ -45,6 +45,8 @@ public class MiningMachineWaitingArea : MonoBehaviour
     [SerializeField, Min(0f)] private float initialLayoutPadding = 0.05f;
 
     private bool initialMachinesSpawned;
+    private readonly HashSet<string> spawnedRewardMachineIds =
+        new HashSet<string>();
 
     public MiningMachineItem SelectedMachine { get; private set; }
 
@@ -112,6 +114,74 @@ public class MiningMachineWaitingArea : MonoBehaviour
         {
             Debug.LogWarning($"{name}：没有找到 MiningMachineDeploymentArea。请在开采区域网格上添加该组件。", this);
         }
+    }
+
+    /// <summary>
+    /// Ensures the configured starting machines exist before a level manager
+    /// adds machines unlocked by permanent rewards.
+    /// </summary>
+    public void EnsureInitialMachinesSpawned()
+    {
+        SpawnInitialMachines();
+
+        if (deploymentArea == null)
+        {
+            deploymentArea = FindFirstObjectByType<MiningMachineDeploymentArea>();
+        }
+    }
+
+    /// <summary>
+    /// Instantiates one permanently unlocked reward machine in the waiting
+    /// area. The reward ID makes this operation idempotent during scene setup.
+    /// </summary>
+    public MiningMachineItem SpawnRewardMachine(
+        MiningMachineItem prefab,
+        string rewardId)
+    {
+        if (prefab == null || string.IsNullOrWhiteSpace(rewardId))
+        {
+            return null;
+        }
+
+        if (spawnedRewardMachineIds.Contains(rewardId))
+        {
+            return null;
+        }
+
+        EnsureInitialMachinesSpawned();
+
+        Transform parent = spawnParent != null ? spawnParent : transform;
+        MiningMachineItem machine = Instantiate(prefab, parent, false);
+        machine.name = $"{prefab.name}_Reward";
+        int slotIndex = machines.Count;
+        int columns = Mathf.Max(1, initialColumns);
+        int column = slotIndex % columns;
+        int row = slotIndex / columns;
+        machine.transform.localPosition = new Vector3(
+            initialStartLocalPosition.x + column * initialSpacing.x,
+            initialStartLocalPosition.y + row * initialSpacing.y,
+            machine.transform.localPosition.z);
+
+        RegisterMachine(machine);
+        spawnedRewardMachineIds.Add(rewardId);
+
+        // Refit all waiting machines so a newly-unlocked machine receives a
+        // valid slot inside the waiting area instead of overlapping another.
+        if (fitInitialMachinesToWaitingArea && machines.Count > 0)
+        {
+            ArrangeInitialMachines(new List<MiningMachineItem>(machines), columns);
+        }
+
+        foreach (MiningMachineItem waitingMachine in machines)
+        {
+            if (waitingMachine != null)
+            {
+                waitingMachine.CaptureWaitingAreaPlacement();
+            }
+        }
+
+        Debug.Log($"待选区生成永久解锁采矿机：{machine.name}。", machine);
+        return machine;
     }
 
     private void Update()
