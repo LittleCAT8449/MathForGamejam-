@@ -73,6 +73,7 @@ public class NumberArea : MonoBehaviour
         }
 
         HandleStampingAreaClick(screenPosition);
+        HandleSettlementAreaClick(screenPosition);
     }
 
     /// <summary>
@@ -172,6 +173,22 @@ public class NumberArea : MonoBehaviour
         MoveSelectedNumberToStampingArea(selectedToken, worldPosition);
     }
 
+    private void HandleSettlementAreaClick(Vector2 screenPosition)
+    {
+        if (settlementArea == null ||
+            !TryGetPointerWorldPosition(screenPosition, out Vector3 worldPosition) ||
+            !settlementArea.ContainsPoint(worldPosition))
+        {
+            return;
+        }
+
+        NumberToken clickedToken = FindTopmostToken(screenPosition);
+        if (clickedToken != null)
+        {
+            ReturnNumberToNumberArea(clickedToken);
+        }
+    }
+
     private void MoveSelectedNumberToStampingArea(
         NumberToken token,
         Vector3 worldPosition)
@@ -198,7 +215,7 @@ public class NumberArea : MonoBehaviour
         Debug.Log($"数字 {token.Value} 已通过点击放入冲压区。", token);
     }
 
-    private void ReturnNumberToNumberArea(NumberToken token)
+    public void ReturnNumberToNumberArea(NumberToken token)
     {
         if (token == null)
         {
@@ -243,7 +260,7 @@ public class NumberArea : MonoBehaviour
         drag.Configure(inputCamera, stampingArea, settlementArea);
         drag.MoveToNumberArea(transform, worldPosition);
         token.SetSelected(false);
-        Debug.Log($"数字 {token.Value} 已返回数字区。", token);
+        Debug.Log($"交付区数字 {token.Value} 已返回数字区。", token);
     }
 
     private bool TryGetPointerWorldPosition(
