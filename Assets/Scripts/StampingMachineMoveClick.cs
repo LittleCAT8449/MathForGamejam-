@@ -43,7 +43,8 @@ public class StampingMachineMoveClick : MonoBehaviour
 
     private void Update()
     {
-        if (inputCamera == null || Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
+        if (GameResetClick.IsModalOpen || inputCamera == null || Mouse.current == null ||
+            !Mouse.current.leftButton.wasPressedThisFrame)
         {
             return;
         }
@@ -59,6 +60,11 @@ public class StampingMachineMoveClick : MonoBehaviour
     /// </summary>
     public void CallMove()
     {
+        if (GameResetClick.IsModalOpen)
+        {
+            return;
+        }
+
         if (stampingMachine == null)
         {
             Debug.LogWarning("无法启动冲压：没有指定 StampingMachine。", this);

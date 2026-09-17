@@ -31,7 +31,8 @@ public class RotateSelectedMachineClick : MonoBehaviour
 
     private void Update()
     {
-        if (Mouse.current == null || inputCamera == null || buttonCollider == null)
+        if (GameResetClick.IsModalOpen || Mouse.current == null ||
+            inputCamera == null || buttonCollider == null)
         {
             return;
         }

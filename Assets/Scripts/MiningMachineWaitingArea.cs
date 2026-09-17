@@ -116,7 +116,7 @@ public class MiningMachineWaitingArea : MonoBehaviour
 
     private void Update()
     {
-        if (Mouse.current == null)
+        if (GameResetClick.IsModalOpen || Mouse.current == null)
         {
             return;
         }

@@ -86,6 +86,20 @@ public class SettlementArea : MonoBehaviour
         Debug.Log($"结果数字 {token.Value} 已放入结算区。", token);
     }
 
+    /// <summary>
+    /// Removes a number from the settlement list when it is clicked and moved
+    /// back to the stamping area.
+    /// </summary>
+    public bool RemoveNumber(NumberToken token)
+    {
+        if (token == null)
+        {
+            return false;
+        }
+
+        return placedNumbers.Remove(token);
+    }
+
     public void ClearNumbers()
     {
         foreach (NumberToken token in placedNumbers)

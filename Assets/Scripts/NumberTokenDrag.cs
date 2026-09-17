@@ -10,12 +10,15 @@ public class NumberTokenDrag : MonoBehaviour
 {
     [SerializeField] private Camera inputCamera;
     [SerializeField] private Collider2D stampingArea;
+    [SerializeField, Min(0f)] private float dragThresholdPixels = 8f;
 
     private NumberToken numberToken;
     private SettlementArea settlementArea;
     private Vector3 originalPosition;
     private Vector3 dragOffset;
     private float pointerDepth;
+    private Vector2 pointerDownPosition;
+    private bool pointerPressed;
     private bool isDragging;
 
     private void Awake()
@@ -44,9 +47,50 @@ public class NumberTokenDrag : MonoBehaviour
         settlementArea = targetSettlementArea;
     }
 
+    /// <summary>
+    /// Moves this number to a clicked point in the stamping area and enables
+    /// the same dynamic physics used by normal drag-and-drop.
+    /// </summary>
+    public void MoveToStampingArea(Vector3 worldPosition)
+    {
+        pointerPressed = false;
+        isDragging = false;
+        transform.SetParent(null, true);
+        worldPosition.z = transform.position.z;
+        transform.position = worldPosition;
+        EnableDynamicPhysics();
+    }
+
+    public bool IsPointerPressed => pointerPressed;
+
+    /// <summary>
+    /// Cancels the current pointer interaction. This is used when the area
+    /// click handler consumes a click on a stamping-area token before the
+    /// normal drag handler processes the same mouse release.
+    /// </summary>
+    public void CancelPointerInteraction()
+    {
+        pointerPressed = false;
+        isDragging = false;
+    }
+
+    /// <summary>
+    /// Places this number back into the number area at the supplied world
+    /// position and turns off gravity so it stays in its slot.
+    /// </summary>
+    public void MoveToNumberArea(Transform numberAreaTransform, Vector3 worldPosition)
+    {
+        pointerPressed = false;
+        isDragging = false;
+        transform.SetParent(numberAreaTransform, true);
+        worldPosition.z = transform.position.z;
+        transform.position = worldPosition;
+        SettlePhysics();
+    }
+
     private void Update()
     {
-        if (inputCamera == null || Mouse.current == null)
+        if (GameResetClick.IsModalOpen || inputCamera == null || Mouse.current == null)
         {
             return;
         }
@@ -56,7 +100,14 @@ public class NumberTokenDrag : MonoBehaviour
 
         if (mouse.leftButton.wasPressedThisFrame)
         {
-            BeginDrag(pointerPosition);
+            BeginPointerInteraction(pointerPosition);
+        }
+
+        if (pointerPressed && mouse.leftButton.isPressed && !isDragging &&
+            (pointerPosition - pointerDownPosition).sqrMagnitude >=
+            dragThresholdPixels * dragThresholdPixels)
+        {
+            StartDrag();
         }
 
         if (isDragging && mouse.leftButton.isPressed)
@@ -64,15 +115,23 @@ public class NumberTokenDrag : MonoBehaviour
             UpdateDrag(pointerPosition);
         }
 
-        if (isDragging && mouse.leftButton.wasReleasedThisFrame)
+        if (pointerPressed && mouse.leftButton.wasReleasedThisFrame)
         {
-            EndDrag();
+            if (isDragging)
+            {
+                EndDrag();
+            }
+            else
+            {
+                pointerPressed = false;
+                numberToken.ToggleSelected();
+            }
         }
     }
 
-    private void BeginDrag(Vector2 screenPosition)
+    private void BeginPointerInteraction(Vector2 screenPosition)
     {
-        if (isDragging || FindTopmostToken(screenPosition) != this)
+        if (pointerPressed || FindTopmostToken(screenPosition) != this)
         {
             return;
         }
@@ -80,7 +139,14 @@ public class NumberTokenDrag : MonoBehaviour
         originalPosition = transform.position;
         pointerDepth = inputCamera.WorldToScreenPoint(originalPosition).z;
         dragOffset = originalPosition - ScreenToWorld(screenPosition);
+        pointerDownPosition = screenPosition;
+        pointerPressed = true;
+    }
+
+    private void StartDrag()
+    {
         isDragging = true;
+        numberToken.SetSelected(true);
 
         Debug.Log($"开始拖拽数字：{numberToken.Value}", numberToken);
     }
@@ -95,6 +161,7 @@ public class NumberTokenDrag : MonoBehaviour
     private void EndDrag()
     {
         isDragging = false;
+        pointerPressed = false;
 
         Vector2 dropPosition = transform.position;
 

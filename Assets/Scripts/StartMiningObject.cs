@@ -54,7 +54,8 @@ public class StartMiningObject : MonoBehaviour
 
     private void Update()
     {
-        if (inputCamera == null || Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
+        if (GameResetClick.IsModalOpen || inputCamera == null || Mouse.current == null ||
+            !Mouse.current.leftButton.wasPressedThisFrame)
         {
             return;
         }
@@ -70,6 +71,11 @@ public class StartMiningObject : MonoBehaviour
     /// </summary>
     public void BeginMining()
     {
+        if (GameResetClick.IsModalOpen)
+        {
+            return;
+        }
+
         if (deploymentArea == null)
         {
             Debug.LogWarning("无法开始采矿：没有指定开采区域。", this);

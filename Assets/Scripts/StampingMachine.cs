@@ -35,6 +35,33 @@ public class StampingMachine : MonoBehaviour
     private Collider2D[] pressColliders;
     private readonly List<Collider2D> ignoredTokenColliders = new List<Collider2D>();
 
+    /// <summary>
+    /// True after Move has successfully started at least one press cycle in
+    /// the current round. GameResetClick uses this to decide whether returning
+    /// to the mining scene needs confirmation.
+    /// </summary>
+    public bool HasStartedStamping { get; private set; }
+
+    /// <summary>
+    /// Fallback round state used by the return button when a press object is
+    /// temporarily inactive or not discoverable by FindObjectsByType.
+    /// </summary>
+    public static bool HasStartedAnyStampingThisRound { get; private set; }
+
+    /// <summary>
+    /// The operation that will be used by the next press cycle.
+    /// </summary>
+    public StampOperation Operation => operation;
+
+    /// <summary>
+    /// Changes the operation used when the press reads its number tokens.
+    /// </summary>
+    public void SetOperation(StampOperation selectedOperation)
+    {
+        operation = selectedOperation;
+        Debug.Log($"冲压运算已设置为：{operation}。", this);
+    }
+
     private void Awake()
     {
         if (pressBody == null)
@@ -122,6 +149,8 @@ public class StampingMachine : MonoBehaviour
         hasOperand = false;
         calculationValid = true;
         isMoving = true;
+        HasStartedStamping = true;
+        HasStartedAnyStampingThisRound = true;
 
         // Input numbers can be resting on or intersecting the press body.
         // Ignore only their physical response while the press is moving;
@@ -420,6 +449,8 @@ public class StampingMachine : MonoBehaviour
     {
         isMoving = false;
         isReturning = false;
+        HasStartedStamping = false;
+        HasStartedAnyStampingThisRound = false;
         hasOperand = false;
         calculationValid = false;
         consumedTokens.Clear();

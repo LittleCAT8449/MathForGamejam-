@@ -10,6 +10,15 @@ public class GameResetClick : MonoBehaviour
 {
     [SerializeField] private Camera inputCamera;
     [SerializeField] private LayerMask clickableLayers = Physics2D.DefaultRaycastLayers;
+    [Header("冲压后的返回提示")]
+    [Tooltip("第一次冲压后点击返回采矿时显示的弹窗对象。请在场景中提前设为未激活。")]
+    [SerializeField] private GameObject resetConfirmationObject;
+
+    /// <summary>
+    /// True while the reset confirmation object is visible. Other scene input
+    /// scripts use this gate so the modal prompt blocks world interactions.
+    /// </summary>
+    public static bool IsModalOpen { get; private set; }
 
     private void Awake()
     {
@@ -20,6 +29,8 @@ public class GameResetClick : MonoBehaviour
         {
             inputCamera = Camera.main;
         }
+
+        CloseResetConfirmation();
     }
 
     private void Start()
@@ -32,7 +43,8 @@ public class GameResetClick : MonoBehaviour
 
     private void Update()
     {
-        if (inputCamera == null || Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
+        if (IsModalOpen || inputCamera == null || Mouse.current == null ||
+            !Mouse.current.leftButton.wasPressedThisFrame)
         {
             return;
         }
@@ -47,6 +59,39 @@ public class GameResetClick : MonoBehaviour
     /// Can also be connected to a Unity UI Button's OnClick event.
     /// </summary>
     public void ResetRound()
+    {
+        if (IsModalOpen)
+        {
+            return;
+        }
+
+        if (HasAnyStampStarted())
+        {
+            OpenResetConfirmation();
+            return;
+        }
+
+        PerformResetRound();
+    }
+
+    /// <summary>
+    /// Connect this to the confirmation object's “重新开始” button.
+    /// </summary>
+    public void ConfirmResetRound()
+    {
+        CloseResetConfirmation();
+        PerformResetRound();
+    }
+
+    /// <summary>
+    /// Connect this to the confirmation object's “否” button.
+    /// </summary>
+    public void CancelResetRound()
+    {
+        CloseResetConfirmation();
+    }
+
+    private void PerformResetRound()
     {
         StampingMachine[] presses = FindObjectsByType<StampingMachine>(FindObjectsSortMode.None);
         foreach (StampingMachine press in presses)
@@ -97,6 +142,61 @@ public class GameResetClick : MonoBehaviour
         }
 
         Debug.Log("重置完成：冲压机和摄像机归位、数字清除、采矿机返回待选区。", this);
+    }
+
+    private bool HasAnyStampStarted()
+    {
+        if (StampingMachine.HasStartedAnyStampingThisRound)
+        {
+            Debug.Log("返回采矿检查：本局已开始冲压，需要确认。", this);
+            return true;
+        }
+
+        StampingMachine[] presses = FindObjectsByType<StampingMachine>(FindObjectsSortMode.None);
+        foreach (StampingMachine press in presses)
+        {
+            if (press != null && press.HasStartedStamping)
+            {
+                Debug.Log("返回采矿检查：检测到冲压机已开始冲压，需要确认。", this);
+                return true;
+            }
+        }
+
+        Debug.Log("返回采矿检查：尚未检测到冲压，直接执行重置。", this);
+        return false;
+    }
+
+    private void OpenResetConfirmation()
+    {
+        if (resetConfirmationObject == null)
+        {
+            Debug.LogWarning(
+                "返回采矿需要确认弹窗，但没有指定 Reset Confirmation Object。",
+                this);
+            return;
+        }
+
+        resetConfirmationObject.SetActive(true);
+        IsModalOpen = true;
+        Debug.Log("检测到本局已经开始冲压，打开返回采矿确认提示。", this);
+    }
+
+    private void CloseResetConfirmation()
+    {
+        IsModalOpen = false;
+
+        if (resetConfirmationObject != null &&
+            resetConfirmationObject != gameObject)
+        {
+            resetConfirmationObject.SetActive(false);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        // Do not leave the static input gate enabled if the scene is unloaded
+        // while the confirmation object is visible.
+        IsModalOpen = false;
     }
 
     private bool WasClicked(Vector2 screenPosition)
