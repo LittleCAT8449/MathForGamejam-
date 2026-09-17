@@ -153,7 +153,7 @@ MonoBehaviour:
   inputCamera: {fileID: 519420031}
   clickableLayers:
     serializedVersion: 2
-    m_Bits: 51
+    m_Bits: 115
 --- !u!61 &62210132
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -393,7 +393,7 @@ MonoBehaviour:
   deploymentArea: {fileID: 289951037}
   batterySources:
   - {fileID: 1055605943}
-  batteryContactTolerance: 0.02
+  batteryContactTolerance: 0.05
 --- !u!114 &289951037
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -527,6 +527,8 @@ MonoBehaviour:
   initialStartLocalPosition: {x: 0, y: 0}
   initialSpacing: {x: 1.2, y: 1.2}
   initialColumns: 4
+  fitInitialMachinesToWaitingArea: 1
+  initialLayoutPadding: 0.05
 --- !u!1 &452708868
 GameObject:
   m_ObjectHideFlags: 0
@@ -2195,7 +2197,7 @@ MonoBehaviour:
   inputCamera: {fileID: 519420031}
   clickableLayers:
     serializedVersion: 2
-    m_Bits: 51
+    m_Bits: 115
   deploymentArea: {fileID: 289951037}
   numberArea: {fileID: 1934807138}
 --- !u!61 &1766897794
@@ -2349,7 +2351,7 @@ MonoBehaviour:
   inputCamera: {fileID: 519420031}
   clickableLayers:
     serializedVersion: 2
-    m_Bits: 51
+    m_Bits: 115
 --- !u!61 &1810646483
 BoxCollider2D:
   m_ObjectHideFlags: 0

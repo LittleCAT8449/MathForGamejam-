@@ -13,6 +13,9 @@ public class GameResetClick : MonoBehaviour
 
     private void Awake()
     {
+        // Always include this button's own layer in the raycast mask.
+        clickableLayers |= 1 << gameObject.layer;
+
         if (inputCamera == null)
         {
             inputCamera = Camera.main;

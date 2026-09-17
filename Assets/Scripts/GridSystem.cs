@@ -83,6 +83,44 @@ public class GridSystem : MonoBehaviour
     }
 
     /// <summary>
+    /// Returns the world-space bounds of one grid cell. This is useful for
+    /// systems that need to test contact with a cell without relying on a
+    /// TilemapCollider2D having rebuilt its geometry yet.
+    /// </summary>
+    public bool TryGetCellWorldBounds(Vector2Int cell, out Bounds worldBounds)
+    {
+        worldBounds = default;
+
+        if (!IsCellInsideGrid(cell) || !TryGetLocalSpriteBounds(out Bounds bounds))
+        {
+            return false;
+        }
+
+        float cellWidth = bounds.size.x / columns;
+        float cellHeight = bounds.size.y / rows;
+        if (cellWidth <= 0f || cellHeight <= 0f)
+        {
+            return false;
+        }
+
+        float minX = bounds.min.x + cell.x * cellWidth;
+        float minY = bounds.min.y + cell.y * cellHeight;
+        float maxX = minX + cellWidth;
+        float maxY = minY + cellHeight;
+
+        Vector3 bottomLeft = transform.TransformPoint(new Vector3(minX, minY, bounds.center.z));
+        Vector3 topLeft = transform.TransformPoint(new Vector3(minX, maxY, bounds.center.z));
+        Vector3 bottomRight = transform.TransformPoint(new Vector3(maxX, minY, bounds.center.z));
+        Vector3 topRight = transform.TransformPoint(new Vector3(maxX, maxY, bounds.center.z));
+
+        worldBounds = new Bounds(bottomLeft, Vector3.zero);
+        worldBounds.Encapsulate(topLeft);
+        worldBounds.Encapsulate(bottomRight);
+        worldBounds.Encapsulate(topRight);
+        return true;
+    }
+
+    /// <summary>
     /// Checks whether a rectangular footprint fits in the grid.
     /// The bottom-left cell is included in the footprint.
     /// </summary>

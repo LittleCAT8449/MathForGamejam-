@@ -82,7 +82,7 @@ public class CustomTilemapShape : MonoBehaviour
     /// <summary>
     /// The deployment system puts the machine root at the center of its
     /// footprint. Tilemap cells are authored from (0, 0), so move the Tilemap
-    /// by half of the declared shape size to make that same center the pivot.
+    /// by half of the actually filled bounds to make that same center the pivot.
     /// </summary>
     private void CenterTilemapOnShape()
     {
@@ -93,10 +93,12 @@ public class CustomTilemapShape : MonoBehaviour
 
         Grid grid = tilemap.GetComponentInParent<Grid>();
         Vector3 cellSize = grid != null ? grid.cellSize : Vector3.one;
+        Vector2Int minimum = Vector2Int.zero;
         Vector2Int size = shapeData.ShapeSize;
+        shapeData.TryGetFilledBounds(out minimum, out size);
         Vector3 shapeCenterInCells = new Vector3(
-            tilemapOrigin.x + size.x * 0.5f,
-            tilemapOrigin.y + size.y * 0.5f,
+            tilemapOrigin.x + minimum.x + size.x * 0.5f,
+            tilemapOrigin.y + minimum.y + size.y * 0.5f,
             0f);
 
         Vector3 localPosition = tilemap.transform.localPosition;

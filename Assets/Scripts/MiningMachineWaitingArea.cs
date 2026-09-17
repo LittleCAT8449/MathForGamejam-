@@ -34,6 +34,9 @@ public class MiningMachineWaitingArea : MonoBehaviour
     [SerializeField] private Vector2 initialStartLocalPosition = Vector2.zero;
     [SerializeField] private Vector2 initialSpacing = new Vector2(1.2f, 1.2f);
     [SerializeField, Min(1)] private int initialColumns = 4;
+    [Tooltip("启用后按待选区域 SpriteRenderer 的范围自动排列初始机器，避免 spawnParent 的缩放导致机器跑出区域。")]
+    [SerializeField] private bool fitInitialMachinesToWaitingArea = true;
+    [SerializeField, Min(0f)] private float initialLayoutPadding = 0.05f;
 
     private bool initialMachinesSpawned;
 
@@ -153,6 +156,7 @@ public class MiningMachineWaitingArea : MonoBehaviour
         int spawnIndex = 0;
         int columns = Mathf.Max(1, initialColumns);
         Transform parent = spawnParent != null ? spawnParent : transform;
+        List<MiningMachineItem> spawnedMachines = new List<MiningMachineItem>();
 
         foreach (InitialMachineEntry entry in initialMachines)
         {
@@ -172,14 +176,106 @@ public class MiningMachineWaitingArea : MonoBehaviour
                     machine.transform.localPosition.z);
                 machine.name = $"{entry.Prefab.name}_{spawnIndex + 1}";
                 RegisterMachine(machine);
+                spawnedMachines.Add(machine);
                 spawnIndex++;
             }
+        }
+
+        if (fitInitialMachinesToWaitingArea && spawnedMachines.Count > 0)
+        {
+            ArrangeInitialMachines(spawnedMachines, columns);
+        }
+
+        foreach (MiningMachineItem machine in spawnedMachines)
+        {
+            machine.CaptureWaitingAreaPlacement();
         }
 
         if (spawnIndex > 0)
         {
             Debug.Log($"{name}：开局生成 {spawnIndex} 台采矿机到待选区。", this);
         }
+    }
+
+    private void ArrangeInitialMachines(List<MiningMachineItem> spawnedMachines, int columns)
+    {
+        SpriteRenderer areaRenderer = GetComponent<SpriteRenderer>();
+        if (areaRenderer == null || areaRenderer.sprite == null)
+        {
+            Debug.LogWarning($"{name}：自动排列初始采矿机需要待选区上的 SpriteRenderer。", this);
+            return;
+        }
+
+        Bounds areaBounds = areaRenderer.bounds;
+        float padding = Mathf.Max(0f, initialLayoutPadding);
+        int count = spawnedMachines.Count;
+        columns = Mathf.Clamp(columns, 1, count);
+        int rows = Mathf.CeilToInt(count / (float)columns);
+
+        List<Bounds> machineBounds = new List<Bounds>(count);
+        float maxHalfWidth = 0f;
+        float maxHalfHeight = 0f;
+
+        foreach (MiningMachineItem machine in spawnedMachines)
+        {
+            if (!TryGetMachineVisualBounds(machine, out Bounds bounds))
+            {
+                bounds = new Bounds(machine.transform.position, Vector3.zero);
+            }
+
+            machineBounds.Add(bounds);
+            maxHalfWidth = Mathf.Max(maxHalfWidth, bounds.extents.x);
+            maxHalfHeight = Mathf.Max(maxHalfHeight, bounds.extents.y);
+        }
+
+        float minX = areaBounds.min.x + padding + maxHalfWidth;
+        float maxX = areaBounds.max.x - padding - maxHalfWidth;
+        float minY = areaBounds.min.y + padding + maxHalfHeight;
+        float maxY = areaBounds.max.y - padding - maxHalfHeight;
+
+        for (int i = 0; i < count; i++)
+        {
+            int column = i % columns;
+            int row = i / columns;
+            float columnT = columns <= 1 ? 0.5f : column / (columns - 1f);
+            float rowT = rows <= 1 ? 0.5f : row / (rows - 1f);
+            Vector3 targetVisualCenter = new Vector3(
+                Mathf.Lerp(minX, maxX, columnT),
+                Mathf.Lerp(minY, maxY, rowT),
+                spawnedMachines[i].transform.position.z);
+
+            Vector3 visualOffset = machineBounds[i].center - spawnedMachines[i].transform.position;
+            Vector3 targetRootPosition = targetVisualCenter - visualOffset;
+            targetRootPosition.z = spawnedMachines[i].transform.position.z;
+            spawnedMachines[i].transform.position = targetRootPosition;
+        }
+    }
+
+    private bool TryGetMachineVisualBounds(MiningMachineItem machine, out Bounds bounds)
+    {
+        Renderer[] renderers = machine.GetComponentsInChildren<Renderer>(true);
+        bool hasBounds = false;
+        bounds = default;
+
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer == null || !renderer.enabled || renderer.bounds.size.sqrMagnitude <= 0f)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                bounds = renderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(renderer.bounds);
+            }
+        }
+
+        return hasBounds;
     }
 
     /// <summary>
@@ -247,6 +343,7 @@ public class MiningMachineWaitingArea : MonoBehaviour
         }
 
         pressedMachine = hitMachine;
+        hitMachine.SetDeploymentPreview(false, false);
         pointerDownPosition = screenPosition;
         originalParent = hitMachine.transform.parent;
         originalWorldPosition = hitMachine.transform.position;
@@ -273,9 +370,24 @@ public class MiningMachineWaitingArea : MonoBehaviour
             }
         }
 
-        Vector3 position = ScreenToWorld(screenPosition) + dragOffset;
-        position.z = originalWorldPosition.z;
-        pressedMachine.transform.position = position;
+        Vector3 pointerWorldPosition = ScreenToWorld(screenPosition) + dragOffset;
+        pointerWorldPosition.z = originalWorldPosition.z;
+
+        if (deploymentArea != null && deploymentArea.TryGetDeploymentPreview(
+                pressedMachine,
+                pointerWorldPosition,
+                out Vector3 previewPosition,
+                out bool canDeploy,
+                out _))
+        {
+            pressedMachine.transform.position = previewPosition;
+            pressedMachine.SetDeploymentPreview(true, canDeploy);
+        }
+        else
+        {
+            pressedMachine.transform.position = pointerWorldPosition;
+            pressedMachine.SetDeploymentPreview(true, false);
+        }
     }
 
     private void EndPointerInteraction()
@@ -304,6 +416,8 @@ public class MiningMachineWaitingArea : MonoBehaviour
                     Debug.LogWarning($"采矿机部署失败：{reason}", machine);
                 }
             }
+
+            machine.SetDeploymentPreview(false, false);
         }
         else
         {

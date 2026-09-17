@@ -1,9 +1,10 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// Connects off-grid batteries to deployed machines by collider contact, then
-/// propagates power through edge-adjacent machine footprints on the grid.
+/// propagates power through edge-adjacent occupied cells on the grid.
 /// </summary>
 [RequireComponent(typeof(GridSystem), typeof(MiningMachineDeploymentArea))]
 public class MiningMachinePowerSystem : MonoBehaviour
@@ -11,7 +12,10 @@ public class MiningMachinePowerSystem : MonoBehaviour
     [SerializeField] private GridSystem grid;
     [SerializeField] private MiningMachineDeploymentArea deploymentArea;
     [SerializeField] private List<BatteryPowerSource> batterySources = new List<BatteryPowerSource>();
-    [SerializeField, Min(0f)] private float batteryContactTolerance = 0.02f;
+    [Tooltip("电池与采矿机碰撞体之间允许的最大间隙（世界坐标单位）。")]
+    [SerializeField, Min(0f)] private float batteryContactTolerance = 0.05f;
+
+    private Coroutine deferredRecalculation;
 
     private void Awake()
     {
@@ -25,14 +29,14 @@ public class MiningMachinePowerSystem : MonoBehaviour
 
         if (deploymentArea != null)
         {
-            deploymentArea.MachinesChanged += RecalculatePower;
+            deploymentArea.MachinesChanged += HandlePowerTopologyChanged;
         }
 
         foreach (BatteryPowerSource battery in batterySources)
         {
             if (battery != null)
             {
-                battery.StateChanged += RecalculatePower;
+                battery.StateChanged += HandlePowerTopologyChanged;
             }
         }
     }
@@ -51,15 +55,21 @@ public class MiningMachinePowerSystem : MonoBehaviour
     {
         if (deploymentArea != null)
         {
-            deploymentArea.MachinesChanged -= RecalculatePower;
+            deploymentArea.MachinesChanged -= HandlePowerTopologyChanged;
         }
 
         foreach (BatteryPowerSource battery in batterySources)
         {
             if (battery != null)
             {
-                battery.StateChanged -= RecalculatePower;
+                battery.StateChanged -= HandlePowerTopologyChanged;
             }
+        }
+
+        if (deferredRecalculation != null)
+        {
+            StopCoroutine(deferredRecalculation);
+            deferredRecalculation = null;
         }
     }
 
@@ -72,6 +82,11 @@ public class MiningMachinePowerSystem : MonoBehaviour
         {
             return;
         }
+
+        // Deployments move and reparent colliders immediately before this
+        // event is raised. Sync the 2D physics world so battery contact uses
+        // the machine's new bounds in the same frame.
+        Physics2D.SyncTransforms();
 
         List<MiningMachineItem> machines = new List<MiningMachineItem>();
         foreach (MiningMachineItem machine in deploymentArea.DeployedMachines)
@@ -116,14 +131,31 @@ public class MiningMachinePowerSystem : MonoBehaviour
         Debug.Log($"电力更新：{poweredMachines.Count}/{machines.Count} 台采矿机已通电。", this);
     }
 
+    private void HandlePowerTopologyChanged()
+    {
+        RecalculatePower();
+
+        // A TilemapCollider2D can rebuild one physics step after a machine is
+        // moved. Recheck once after that rebuild so collider-based contact is
+        // also reliable for the first frame after deployment.
+        if (deferredRecalculation == null && isActiveAndEnabled)
+        {
+            deferredRecalculation = StartCoroutine(RecalculatePowerAfterPhysics());
+        }
+    }
+
+    private IEnumerator RecalculatePowerAfterPhysics()
+    {
+        yield return new WaitForFixedUpdate();
+        deferredRecalculation = null;
+        if (isActiveAndEnabled)
+        {
+            RecalculatePower();
+        }
+    }
+
     private bool TouchesActiveBattery(MiningMachineItem machine)
     {
-        Collider2D machineCollider = machine.GetComponent<Collider2D>();
-        if (machineCollider == null)
-        {
-            return false;
-        }
-
         foreach (BatteryPowerSource battery in batterySources)
         {
             if (battery == null || !battery.IsBatteryActive || battery.SourceCollider == null)
@@ -131,9 +163,28 @@ public class MiningMachinePowerSystem : MonoBehaviour
                 continue;
             }
 
-            if (BoundsAreAdjacent(machineCollider.bounds, battery.SourceCollider.bounds, batteryContactTolerance))
+            Bounds batteryBounds = battery.SourceCollider.bounds;
+
+            // A battery is outside the mining grid, so test each actual
+            // occupied cell against it. This remains reliable before Unity
+            // has rebuilt a TilemapCollider2D after deployment.
+            if (TouchesBatteryByOccupiedCells(machine, batteryBounds))
             {
                 return true;
+            }
+
+            Collider2D[] machineColliders = machine.GetComponentsInChildren<Collider2D>(true);
+
+            foreach (Collider2D machineCollider in machineColliders)
+            {
+                if (machineCollider != null &&
+                    BoundsAreAdjacent(
+                        machineCollider.bounds,
+                        batteryBounds,
+                        batteryContactTolerance))
+                {
+                    return true;
+                }
             }
         }
 
@@ -142,18 +193,60 @@ public class MiningMachinePowerSystem : MonoBehaviour
 
     private bool AreGridAdjacent(MiningMachineItem first, MiningMachineItem second)
     {
-        Vector2Int firstMin = first.BottomLeftCell;
-        Vector2Int firstMax = firstMin + first.FootprintSize;
-        Vector2Int secondMin = second.BottomLeftCell;
-        Vector2Int secondMax = secondMin + second.FootprintSize;
+        List<Vector2Int> firstOffsets = new List<Vector2Int>();
+        List<Vector2Int> secondOffsets = new List<Vector2Int>();
+        first.GetOccupiedCellOffsets(firstOffsets);
+        second.GetOccupiedCellOffsets(secondOffsets);
 
-        bool verticalOverlap = firstMin.y < secondMax.y && secondMin.y < firstMax.y;
-        bool horizontalOverlap = firstMin.x < secondMax.x && secondMin.x < firstMax.x;
-        bool touchesHorizontally = firstMax.x == secondMin.x || secondMax.x == firstMin.x;
-        bool touchesVertically = firstMax.y == secondMin.y || secondMax.y == firstMin.y;
+        HashSet<Vector2Int> secondCells = new HashSet<Vector2Int>();
+        foreach (Vector2Int offset in secondOffsets)
+        {
+            secondCells.Add(second.BottomLeftCell + offset);
+        }
 
-        return (touchesHorizontally && verticalOverlap) ||
-               (touchesVertically && horizontalOverlap);
+        Vector2Int[] directions =
+        {
+            Vector2Int.up,
+            Vector2Int.right,
+            Vector2Int.down,
+            Vector2Int.left
+        };
+
+        foreach (Vector2Int offset in firstOffsets)
+        {
+            Vector2Int firstCell = first.BottomLeftCell + offset;
+            foreach (Vector2Int direction in directions)
+            {
+                if (secondCells.Contains(firstCell + direction))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private bool TouchesBatteryByOccupiedCells(MiningMachineItem machine, Bounds batteryBounds)
+    {
+        if (grid == null || machine.DeploymentArea != deploymentArea)
+        {
+            return false;
+        }
+
+        List<Vector2Int> offsets = new List<Vector2Int>();
+        machine.GetOccupiedCellOffsets(offsets);
+        foreach (Vector2Int offset in offsets)
+        {
+            Vector2Int cell = machine.BottomLeftCell + offset;
+            if (grid.TryGetCellWorldBounds(cell, out Bounds cellBounds) &&
+                BoundsAreAdjacent(cellBounds, batteryBounds, batteryContactTolerance))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool BoundsAreAdjacent(Bounds first, Bounds second, float tolerance)

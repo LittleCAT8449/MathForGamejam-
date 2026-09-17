@@ -32,6 +32,8 @@ public class StampingMachine : MonoBehaviour
     private bool calculationValid;
     private bool isMoving;
     private bool isReturning;
+    private Collider2D[] pressColliders;
+    private readonly List<Collider2D> ignoredTokenColliders = new List<Collider2D>();
 
     private void Awake()
     {
@@ -44,6 +46,8 @@ public class StampingMachine : MonoBehaviour
         {
             settlementArea = FindFirstObjectByType<SettlementArea>();
         }
+
+        pressColliders = GetComponentsInChildren<Collider2D>(true);
 
         initialPosition = pressBody.position;
         // Keep the press still until Move() is called; a default Dynamic body
@@ -73,6 +77,11 @@ public class StampingMachine : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (isMoving)
+        {
+            ConsumeOverlappingTokens();
+        }
+
         if (!isReturning)
         {
             return;
@@ -84,6 +93,7 @@ public class StampingMachine : MonoBehaviour
             pressBody.linearVelocity = Vector2.zero;
             pressBody.bodyType = RigidbodyType2D.Kinematic;
             isReturning = false;
+            RestoreTokenCollisions();
             Debug.Log("冲压机已回到初始位置。", this);
             return;
         }
@@ -112,6 +122,11 @@ public class StampingMachine : MonoBehaviour
         hasOperand = false;
         calculationValid = true;
         isMoving = true;
+
+        // Input numbers can be resting on or intersecting the press body.
+        // Ignore only their physical response while the press is moving;
+        // ConsumeOverlappingTokens still reads and removes them explicitly.
+        IgnoreNumberCollisions();
 
         pressBody.bodyType = RigidbodyType2D.Dynamic;
         pressBody.gravityScale = 0f;
@@ -153,15 +168,7 @@ public class StampingMachine : MonoBehaviour
             return;
         }
 
-        ApplyOperand(token.Value, token);
-        Destroy(token.gameObject);
-
-        // Contact with a token can change a dynamic body's velocity. Keep the
-        // press descending until the anvil is reached.
-        if (isMoving)
-        {
-            pressBody.linearVelocity = Vector2.down * moveSpeed;
-        }
+        ConsumeToken(token);
     }
 
     private void ApplyOperand(decimal value, NumberToken token)
@@ -250,11 +257,160 @@ public class StampingMachine : MonoBehaviour
                 settlementArea.PrepareForDelivery(resultToken);
             }
 
+            // The result is intentionally left in the stamping area for the
+            // player to drag away. It must not physically block the press while
+            // the press returns to its initial position.
+            IgnoreTokenCollision(resultToken);
+
             Debug.Log($"冲压完成，结果：{result}。", resultToken);
         }
 
         isReturning = true;
         pressBody.linearVelocity = Vector2.up * returnSpeed;
+    }
+
+    private void ConsumeToken(NumberToken token)
+    {
+        if (token == null)
+        {
+            return;
+        }
+
+        ApplyOperand(token.Value, token);
+        Destroy(token.gameObject);
+
+        // Contact with a token can change a dynamic body's velocity. Keep the
+        // press descending until the anvil is reached.
+        if (isMoving)
+        {
+            pressBody.linearVelocity = Vector2.down * moveSpeed;
+        }
+    }
+
+    private void ConsumeOverlappingTokens()
+    {
+        if (pressColliders == null || pressColliders.Length == 0)
+        {
+            return;
+        }
+
+        NumberToken[] tokens = FindObjectsByType<NumberToken>(FindObjectsSortMode.None);
+        foreach (NumberToken token in tokens)
+        {
+            if (token == null || consumedTokens.Contains(token))
+            {
+                continue;
+            }
+
+            Collider2D[] tokenColliders = token.GetComponentsInChildren<Collider2D>(true);
+            foreach (Collider2D tokenCollider in tokenColliders)
+            {
+                if (tokenCollider == null)
+                {
+                    continue;
+                }
+
+                foreach (Collider2D pressCollider in pressColliders)
+                {
+                    if (pressCollider != null && pressCollider.bounds.Intersects(tokenCollider.bounds))
+                    {
+                        if (consumedTokens.Add(token))
+                        {
+                            ConsumeToken(token);
+                        }
+
+                        break;
+                    }
+                }
+
+                if (consumedTokens.Contains(token))
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    private void IgnoreNumberCollisions()
+    {
+        RestoreTokenCollisions();
+
+        if (pressColliders == null || pressColliders.Length == 0)
+        {
+            pressColliders = GetComponentsInChildren<Collider2D>(true);
+        }
+
+        NumberToken[] tokens = FindObjectsByType<NumberToken>(FindObjectsSortMode.None);
+        foreach (NumberToken token in tokens)
+        {
+            if (token == null)
+            {
+                continue;
+            }
+
+            IgnoreTokenCollision(token);
+        }
+    }
+
+    private void IgnoreTokenCollision(NumberToken token)
+    {
+        if (token == null)
+        {
+            return;
+        }
+
+        if (pressColliders == null || pressColliders.Length == 0)
+        {
+            pressColliders = GetComponentsInChildren<Collider2D>(true);
+        }
+
+        Collider2D[] tokenColliders = token.GetComponentsInChildren<Collider2D>(true);
+        foreach (Collider2D tokenCollider in tokenColliders)
+        {
+            if (tokenCollider == null)
+            {
+                continue;
+            }
+
+            foreach (Collider2D pressCollider in pressColliders)
+            {
+                if (pressCollider != null)
+                {
+                    Physics2D.IgnoreCollision(pressCollider, tokenCollider, true);
+                }
+            }
+
+            if (!ignoredTokenColliders.Contains(tokenCollider))
+            {
+                ignoredTokenColliders.Add(tokenCollider);
+            }
+        }
+    }
+
+    private void RestoreTokenCollisions()
+    {
+        if (pressColliders == null)
+        {
+            pressColliders = GetComponentsInChildren<Collider2D>(true);
+        }
+
+        foreach (Collider2D tokenCollider in ignoredTokenColliders)
+        {
+            if (tokenCollider == null)
+            {
+                continue;
+            }
+
+            foreach (Collider2D pressCollider in pressColliders)
+            {
+                if (pressCollider != null)
+                {
+                    Physics2D.IgnoreCollision(pressCollider, tokenCollider, false);
+                }
+            }
+        }
+
+        ignoredTokenColliders.Clear();
     }
 
     /// <summary>
@@ -271,5 +427,11 @@ public class StampingMachine : MonoBehaviour
         pressBody.position = initialPosition;
         pressBody.gravityScale = 0f;
         pressBody.bodyType = RigidbodyType2D.Kinematic;
+        RestoreTokenCollisions();
+    }
+
+    private void OnDisable()
+    {
+        RestoreTokenCollisions();
     }
 }

@@ -5,7 +5,8 @@ using UnityEngine.Serialization;
 
 /// <summary>
 /// Attach this component to the mining-area grid object. It validates dropped
-/// machines, snaps them to the grid, and prevents occupied cells from being reused.
+/// machines, snaps them to the grid, and prevents occupied filled cells from
+/// being reused.
 /// </summary>
 [RequireComponent(typeof(GridSystem))]
 public class MiningMachineDeploymentArea : MonoBehaviour
@@ -20,6 +21,73 @@ public class MiningMachineDeploymentArea : MonoBehaviour
 
     public IEnumerable<MiningMachineItem> DeployedMachines => placements.Keys;
     public event Action MachinesChanged;
+
+    /// <summary>
+    /// Calculates the position a machine would occupy without changing any
+    /// deployment state. The returned position is snapped to the grid whenever
+    /// the pointer is inside the mining area, even when the placement is
+    /// invalid because of an occupied cell or an out-of-bounds footprint.
+    /// </summary>
+    public bool TryGetDeploymentPreview(
+        MiningMachineItem machine,
+        Vector3 pointerWorldPosition,
+        out Vector3 previewPosition,
+        out bool canDeploy,
+        out string reason)
+    {
+        previewPosition = pointerWorldPosition;
+        canDeploy = false;
+        reason = string.Empty;
+
+        if (machine == null)
+        {
+            reason = "采矿机不存在。";
+            return false;
+        }
+
+        if (grid == null)
+        {
+            reason = "开采区域没有找到 GridSystem。";
+            return false;
+        }
+
+        if (!grid.TryWorldToCell(pointerWorldPosition, out Vector2Int centerCell))
+        {
+            reason = "请把采矿机放在开采网格内。";
+            return false;
+        }
+
+        Vector2Int footprint = machine.FootprintSize;
+        Vector2Int bottomLeftCell = centerCell -
+            new Vector2Int(footprint.x / 2, footprint.y / 2);
+
+        if (!grid.IsFootprintInsideGrid(bottomLeftCell, footprint))
+        {
+            reason = "采矿机超出开采区域边界。";
+        }
+        else if (!grid.TryGetFootprintCenterWorld(
+                     bottomLeftCell,
+                     footprint,
+                     out previewPosition))
+        {
+            reason = "无法计算采矿机的网格位置。";
+        }
+        else
+        {
+            List<Vector2Int> cells = GetOccupiedCells(machine, bottomLeftCell);
+            foreach (Vector2Int cell in cells)
+            {
+                if (occupiedCells.Contains(cell))
+                {
+                    reason = "目标格子已被占用，无法部署。";
+                    break;
+                }
+            }
+        }
+
+        canDeploy = string.IsNullOrEmpty(reason);
+        return true;
+    }
 
     private void Awake()
     {
@@ -46,50 +114,34 @@ public class MiningMachineDeploymentArea : MonoBehaviour
             return false;
         }
 
-        if (grid == null)
-        {
-            reason = "开采区域没有找到 GridSystem。";
-            return false;
-        }
-
         if (placements.ContainsKey(machine))
         {
             reason = "这台采矿机已经部署。";
             return false;
         }
 
-        if (!grid.TryWorldToCell(droppedWorldPosition, out Vector2Int centerCell))
+        if (!TryGetDeploymentPreview(
+                machine,
+                droppedWorldPosition,
+                out Vector3 snappedPosition,
+                out bool canDeploy,
+                out reason))
         {
-            reason = "请把采矿机放在开采网格内。";
             return false;
         }
 
+        if (!canDeploy)
+        {
+            return false;
+        }
+
+        grid.TryWorldToCell(droppedWorldPosition, out Vector2Int centerCell);
         Vector2Int footprint = machine.FootprintSize;
         // The machine pivot is treated as the footprint center. Even-sized
         // footprints are biased toward the lower-left cell.
         Vector2Int bottomLeftCell = centerCell - new Vector2Int(footprint.x / 2, footprint.y / 2);
 
-        if (!grid.IsFootprintInsideGrid(bottomLeftCell, footprint))
-        {
-            reason = "采矿机超出开采区域边界。";
-            return false;
-        }
-
-        List<Vector2Int> cells = GetFootprintCells(bottomLeftCell, footprint);
-        foreach (Vector2Int cell in cells)
-        {
-            if (occupiedCells.Contains(cell))
-            {
-                reason = "目标格子已被占用，无法部署。";
-                return false;
-            }
-        }
-
-        if (!grid.TryGetFootprintCenterWorld(bottomLeftCell, footprint, out Vector3 snappedPosition))
-        {
-            reason = "无法计算采矿机的网格位置。";
-            return false;
-        }
+        List<Vector2Int> cells = GetOccupiedCells(machine, bottomLeftCell);
 
         if (machine.WaitingArea != null)
         {
@@ -170,15 +222,17 @@ public class MiningMachineDeploymentArea : MonoBehaviour
         }
     }
 
-    private List<Vector2Int> GetFootprintCells(Vector2Int bottomLeftCell, Vector2Int footprint)
+    private List<Vector2Int> GetOccupiedCells(
+        MiningMachineItem machine,
+        Vector2Int bottomLeftCell)
     {
-        List<Vector2Int> cells = new List<Vector2Int>(footprint.x * footprint.y);
-        for (int x = 0; x < footprint.x; x++)
+        List<Vector2Int> offsets = new List<Vector2Int>();
+        machine.GetOccupiedCellOffsets(offsets);
+
+        List<Vector2Int> cells = new List<Vector2Int>(offsets.Count);
+        foreach (Vector2Int offset in offsets)
         {
-            for (int y = 0; y < footprint.y; y++)
-            {
-                cells.Add(bottomLeftCell + new Vector2Int(x, y));
-            }
+            cells.Add(bottomLeftCell + offset);
         }
 
         return cells;

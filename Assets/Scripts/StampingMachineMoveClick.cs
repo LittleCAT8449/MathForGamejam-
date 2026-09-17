@@ -13,6 +13,10 @@ public class StampingMachineMoveClick : MonoBehaviour
 
     private void Awake()
     {
+        // Keep the button clickable even when its GameObject is moved to a
+        // custom layer and the serialized mask was not updated.
+        clickableLayers |= 1 << gameObject.layer;
+
         if (inputCamera == null)
         {
             inputCamera = Camera.main;
