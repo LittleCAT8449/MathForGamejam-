@@ -94,8 +94,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   selectedColor: {r: 1, g: 0.85, b: 0.2, a: 1}
   poweredColor: {r: 0.45, g: 1, b: 0.45, a: 1}
+  previewValidColor: {r: 0.25, g: 1, b: 0.35, a: 0.65}
+  previewInvalidColor: {r: 1, g: 0.2, b: 0.2, a: 0.65}
   waitingArea: {fileID: 0}
   footprintSize: {x: 1, y: 1}
+  autoFootprintFromShape: 1
   productionNumber: 4
 --- !u!1 &7237207179979603820
 GameObject:
@@ -126,7 +129,7 @@ Transform:
   m_GameObject: {fileID: 7237207179979603820}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -1, y: -1.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

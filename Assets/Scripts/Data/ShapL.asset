@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81b249fcf9db4ccf9475e0181391e5b3, type: 3}
   m_Name: ShapL
   m_EditorClassIdentifier: 
-  shapeSize: {x: 3, y: 3}
+  shapeSize: {x: 2, y: 3}
   filledCells:
   - {x: 0, y: 0}
   - {x: 1, y: 0}

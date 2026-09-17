@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using TMPro;
 
 /// <summary>
 /// Attach this component to the waiting-area object. Put selectable machine objects
@@ -24,6 +25,11 @@ public class MiningMachineWaitingArea : MonoBehaviour
     [SerializeField] private List<MiningMachineItem> machines = new List<MiningMachineItem>();
     [SerializeField] private MiningMachineDeploymentArea deploymentArea;
     [SerializeField, Min(0f)] private float dragThresholdPixels = 8f;
+
+    [Header("部署提示")]
+    [Tooltip("拖拽一个 TextMeshPro 或 TextMeshProUGUI 到这里。放置位置无效时会显示提示。")]
+    [SerializeField] private TMP_Text deploymentPrompt;
+    [SerializeField] private string blockedDeploymentMessage = "区域已占用，无法部署/旋转";
 
     [Header("开局生成")]
     [SerializeField] private bool spawnInitialMachines = true;
@@ -50,9 +56,12 @@ public class MiningMachineWaitingArea : MonoBehaviour
     private Vector2 pointerDownPosition;
     private Vector3 originalWorldPosition;
     private int originalRotationQuarterTurns;
+    private Vector2Int originalDeploymentBottomLeftCell;
     private Vector3 dragOffset;
     private float pointerDepth;
     private bool isDragging;
+    private bool wasDeployedAtPointerDown;
+    private bool deploymentReleasedForDrag;
 
     /// <summary>
     /// Raised when the selected machine changes. Null means nothing is selected.
@@ -65,6 +74,13 @@ public class MiningMachineWaitingArea : MonoBehaviour
         {
             inputCamera = Camera.main;
         }
+
+        if (deploymentPrompt == null)
+        {
+            deploymentPrompt = GetComponentInChildren<TMP_Text>(true);
+        }
+
+        HideDeploymentPrompt();
 
         RegisterChildMachines();
     }
@@ -110,7 +126,23 @@ public class MiningMachineWaitingArea : MonoBehaviour
 
         if (mouse.leftButton.wasPressedThisFrame)
         {
+            HideDeploymentPrompt();
             BeginPointerInteraction(pointerPosition);
+
+            // A selected machine can also be deployed by clicking a grid cell
+            // directly. BeginPointerInteraction leaves pressedMachine null
+            // when the pointer is not on another waiting machine, so this does
+            // not interfere with the existing drag path.
+            if (pressedMachine == null)
+            {
+                // A rotation SpriteObject is an action target, not a grid cell.
+                // Do not interpret a click on it as click-to-deploy even if the
+                // button happens to overlap the mining area on screen.
+                if (!IsPointerOverRotationButton(pointerPosition))
+                {
+                    TryDeploySelectedByClick(pointerPosition);
+                }
+            }
         }
 
         if (pressedMachine != null && mouse.leftButton.isPressed)
@@ -311,11 +343,15 @@ public class MiningMachineWaitingArea : MonoBehaviour
     }
 
     /// <summary>
-    /// Selects a machine, or deselects it if it is already selected.
+    /// Selects a waiting or deployed machine, or deselects it if it is already
+    /// selected.
     /// </summary>
     public void ToggleSelection(MiningMachineItem machine)
     {
-        if (machine == null || !machines.Contains(machine))
+        bool isWaitingMachine = machine != null && machines.Contains(machine);
+        bool isDeployedMachine = machine != null && deploymentArea != null &&
+                                 deploymentArea.IsDeployed(machine);
+        if (machine == null || (!isWaitingMachine && !isDeployedMachine))
         {
             return;
         }
@@ -331,6 +367,90 @@ public class MiningMachineWaitingArea : MonoBehaviour
         SetSelectedMachine(null);
     }
 
+    /// <summary>
+    /// Rotates the currently selected machine by one clockwise quarter-turn.
+    /// Deployed machines are temporarily removed from the occupancy table so
+    /// their own cells do not block the rotation check. If the rotated shape
+    /// does not fit, both the visual rotation and the original deployment are
+    /// restored.
+    /// </summary>
+    public bool RotateSelectedMachine()
+    {
+        MiningMachineItem machine = SelectedMachine;
+        if (machine == null)
+        {
+            Debug.Log("没有选中的采矿机，无法旋转。", this);
+            return false;
+        }
+
+        bool wasDeployed = deploymentArea != null &&
+                           deploymentArea.IsDeployed(machine);
+        Vector3 originalPosition = machine.transform.position;
+        Quaternion originalRotation = machine.transform.rotation;
+        int originalQuarterTurns = machine.RotationQuarterTurns;
+        Vector2Int originalBottomLeftCell = machine.BottomLeftCell;
+
+        if (wasDeployed)
+        {
+            deploymentArea.RemoveDeployment(machine);
+        }
+
+        // Waiting-area parents are often scaled non-uniformly to fit a colored
+        // region. Rotate under a neutral parent so the Sprite/Tilemap does not
+        // shear while the selected machine is turned by the button.
+        Transform originalParent = machine.transform.parent;
+        if (!wasDeployed && originalParent != null)
+        {
+            machine.transform.SetParent(null, true);
+            machine.RotateClockwise();
+            machine.transform.SetParent(originalParent, true);
+        }
+        else
+        {
+            machine.RotateClockwise();
+        }
+
+        if (!wasDeployed)
+        {
+            HideDeploymentPrompt();
+            Debug.Log($"已旋转选中的采矿机：{machine.name}", machine);
+            return true;
+        }
+
+        if (deploymentArea.TryGetDeploymentPreview(
+                machine,
+                originalPosition,
+                out Vector3 previewPosition,
+                out bool canDeploy,
+                out string reason) &&
+            canDeploy &&
+            deploymentArea.TryDeploy(machine, previewPosition, out reason))
+        {
+            HideDeploymentPrompt();
+            Debug.Log($"已旋转选中的采矿机：{machine.name}", machine);
+            return true;
+        }
+
+        machine.transform.position = originalPosition;
+        machine.transform.rotation = originalRotation;
+        machine.RestoreRotationState(originalQuarterTurns);
+
+        if (!deploymentArea.RestoreDeployment(
+                machine,
+                originalBottomLeftCell,
+                out string restoreReason))
+        {
+            Debug.LogError($"旋转失败后恢复采矿机部署位置失败：{restoreReason}", machine);
+        }
+
+        string promptReason = string.IsNullOrEmpty(reason)
+            ? blockedDeploymentMessage
+            : reason;
+        ShowDeploymentPrompt(promptReason);
+        Debug.LogWarning($"采矿机旋转失败：{promptReason}", machine);
+        return false;
+    }
+
     private void RegisterChildMachines()
     {
         MiningMachineItem[] childMachines = GetComponentsInChildren<MiningMachineItem>(true);
@@ -343,6 +463,11 @@ public class MiningMachineWaitingArea : MonoBehaviour
     private void BeginPointerInteraction(Vector2 screenPosition)
     {
         if (inputCamera == null || pressedMachine != null)
+        {
+            return;
+        }
+
+        if (IsPointerOverRotationButton(screenPosition))
         {
             return;
         }
@@ -362,6 +487,9 @@ public class MiningMachineWaitingArea : MonoBehaviour
         originalLocalScale = hitMachine.transform.localScale;
         originalWorldPosition = hitMachine.transform.position;
         originalRotationQuarterTurns = hitMachine.RotationQuarterTurns;
+        wasDeployedAtPointerDown = deploymentArea != null &&
+            deploymentArea.IsDeployed(hitMachine);
+        originalDeploymentBottomLeftCell = hitMachine.BottomLeftCell;
 
         // Waiting-area parents are often scaled differently on X and Y to fit
         // the colored region. Rotating a child under such a parent introduces
@@ -372,6 +500,77 @@ public class MiningMachineWaitingArea : MonoBehaviour
         pointerDepth = inputCamera.WorldToScreenPoint(originalWorldPosition).z;
         dragOffset = originalWorldPosition - ScreenToWorld(screenPosition);
         isDragging = false;
+        deploymentReleasedForDrag = false;
+    }
+
+    private void TryDeploySelectedByClick(Vector2 screenPosition)
+    {
+        if (SelectedMachine == null || deploymentArea == null || inputCamera == null)
+        {
+            return;
+        }
+
+        float depth = inputCamera.WorldToScreenPoint(
+            SelectedMachine.transform.position).z;
+        Vector3 pointerWorldPosition = inputCamera.ScreenToWorldPoint(
+            new Vector3(screenPosition.x, screenPosition.y, depth));
+        pointerWorldPosition.z = SelectedMachine.transform.position.z;
+
+        // Ignore clicks outside the mining grid. A click inside the grid still
+        // returns true when the location is occupied or out of bounds, allowing
+        // us to report the actual deployment reason to the player.
+        if (!deploymentArea.TryGetDeploymentPreview(
+                SelectedMachine,
+                pointerWorldPosition,
+                out _,
+                out bool canDeploy,
+                out string reason))
+        {
+            return;
+        }
+
+        if (!canDeploy)
+        {
+            ShowDeploymentPrompt(reason);
+            if (!string.IsNullOrEmpty(reason))
+            {
+                Debug.LogWarning($"采矿机点击部署失败：{reason}", SelectedMachine);
+            }
+
+            return;
+        }
+
+        if (!deploymentArea.TryDeploy(SelectedMachine, pointerWorldPosition, out reason) &&
+            !string.IsNullOrEmpty(reason))
+        {
+            ShowDeploymentPrompt(reason);
+            Debug.LogWarning($"采矿机点击部署失败：{reason}", SelectedMachine);
+        }
+        else
+        {
+            HideDeploymentPrompt();
+        }
+    }
+
+    private bool IsPointerOverRotationButton(Vector2 screenPosition)
+    {
+        if (inputCamera == null)
+        {
+            return false;
+        }
+
+        Ray ray = inputCamera.ScreenPointToRay(screenPosition);
+        RaycastHit2D[] hits = Physics2D.GetRayIntersectionAll(ray, Mathf.Infinity);
+        foreach (RaycastHit2D hit in hits)
+        {
+            if (hit.collider != null &&
+                hit.collider.GetComponentInParent<RotateSelectedMachineClick>() != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void UpdateDrag(Vector2 screenPosition)
@@ -385,6 +584,12 @@ public class MiningMachineWaitingArea : MonoBehaviour
             }
 
             isDragging = true;
+
+            if (wasDeployedAtPointerDown && !deploymentReleasedForDrag &&
+                deploymentArea != null)
+            {
+                deploymentReleasedForDrag = deploymentArea.RemoveDeployment(pressedMachine);
+            }
 
             if (SelectedMachine != pressedMachine)
             {
@@ -400,15 +605,24 @@ public class MiningMachineWaitingArea : MonoBehaviour
                 pointerWorldPosition,
                 out Vector3 previewPosition,
                 out bool canDeploy,
-                out _))
+                out string reason))
         {
             pressedMachine.transform.position = previewPosition;
             pressedMachine.SetDeploymentPreview(true, canDeploy);
+            if (canDeploy)
+            {
+                HideDeploymentPrompt();
+            }
+            else
+            {
+                ShowDeploymentPrompt(reason);
+            }
         }
         else
         {
             pressedMachine.transform.position = pointerWorldPosition;
             pressedMachine.SetDeploymentPreview(true, false);
+            HideDeploymentPrompt();
         }
     }
 
@@ -418,28 +632,13 @@ public class MiningMachineWaitingArea : MonoBehaviour
 
         if (isDragging)
         {
-            string reason = string.Empty;
-            if (deploymentArea != null &&
-                deploymentArea.TryDeploy(machine, machine.transform.position, out reason))
+            if (wasDeployedAtPointerDown)
             {
-                // TryDeploy removes the machine from this waiting area and clears selection.
+                FinishDeployedMachineDrag(machine);
             }
             else
             {
-                machine.transform.SetParent(originalParent, false);
-                machine.transform.localPosition = originalLocalPosition;
-                machine.transform.localRotation = originalLocalRotation;
-                machine.transform.localScale = originalLocalScale;
-                machine.RestoreRotationState(originalRotationQuarterTurns);
-
-                if (deploymentArea == null)
-                {
-                    Debug.LogWarning("无法部署采矿机：没有找到 MiningMachineDeploymentArea。", machine);
-                }
-                else if (!string.IsNullOrEmpty(reason))
-                {
-                    Debug.LogWarning($"采矿机部署失败：{reason}", machine);
-                }
+                FinishWaitingMachineDrag(machine);
             }
 
             machine.SetDeploymentPreview(false, false);
@@ -452,6 +651,132 @@ public class MiningMachineWaitingArea : MonoBehaviour
         pressedMachine = null;
         originalParent = null;
         isDragging = false;
+        wasDeployedAtPointerDown = false;
+        deploymentReleasedForDrag = false;
+    }
+
+    private void FinishWaitingMachineDrag(MiningMachineItem machine)
+    {
+        string reason = string.Empty;
+        if (deploymentArea != null &&
+            deploymentArea.TryDeploy(machine, machine.transform.position, out reason))
+        {
+            // TryDeploy removes the machine from this waiting area and clears selection.
+            HideDeploymentPrompt();
+            return;
+        }
+
+        RestoreWaitingTransform(machine);
+
+        if (deploymentArea == null)
+        {
+            Debug.LogWarning("无法部署采矿机：没有找到 MiningMachineDeploymentArea。", machine);
+        }
+        else if (!string.IsNullOrEmpty(reason))
+        {
+            ShowDeploymentPrompt(reason);
+            Debug.LogWarning($"采矿机部署失败：{reason}", machine);
+        }
+    }
+
+    private void FinishDeployedMachineDrag(MiningMachineItem machine)
+    {
+        // Dropping over the waiting area's sprite returns the machine to its
+        // original waiting slot and releases its grid cells.
+        if (IsWorldPointInsideWaitingArea(machine.transform.position) &&
+            machine.ReturnToWaitingArea())
+        {
+            if (SelectedMachine == machine)
+            {
+                SetSelectedMachine(null);
+            }
+
+            Debug.Log($"采矿机 {machine.name} 已返回待部署区。", machine);
+            HideDeploymentPrompt();
+            return;
+        }
+
+        string reason = string.Empty;
+        if (deploymentArea != null &&
+            deploymentArea.TryDeploy(machine, machine.transform.position, out reason))
+        {
+            if (SelectedMachine == machine)
+            {
+                SetSelectedMachine(null);
+            }
+
+            HideDeploymentPrompt();
+            return;
+        }
+
+        RestoreDeployedMachine(machine, reason);
+    }
+
+    private void RestoreWaitingTransform(MiningMachineItem machine)
+    {
+        machine.transform.SetParent(originalParent, false);
+        machine.transform.localPosition = originalLocalPosition;
+        machine.transform.localRotation = originalLocalRotation;
+        machine.transform.localScale = originalLocalScale;
+        machine.RestoreRotationState(originalRotationQuarterTurns);
+    }
+
+    private void RestoreDeployedMachine(MiningMachineItem machine, string reason)
+    {
+        RestoreWaitingTransform(machine);
+
+        if (deploymentReleasedForDrag && deploymentArea != null &&
+            !deploymentArea.RestoreDeployment(
+                machine,
+                originalDeploymentBottomLeftCell,
+                out string restoreReason))
+        {
+            Debug.LogError($"采矿机原部署位置恢复失败：{restoreReason}", machine);
+        }
+
+        if (SelectedMachine == machine)
+        {
+            SetSelectedMachine(null);
+        }
+
+        if (!string.IsNullOrEmpty(reason))
+        {
+            ShowDeploymentPrompt(reason);
+            Debug.LogWarning($"采矿机移动失败：{reason}，已恢复原位置。", machine);
+        }
+    }
+
+    private bool IsWorldPointInsideWaitingArea(Vector3 worldPosition)
+    {
+        SpriteRenderer areaRenderer = GetComponent<SpriteRenderer>();
+        if (areaRenderer != null && areaRenderer.sprite != null)
+        {
+            Bounds bounds = areaRenderer.bounds;
+            return worldPosition.x >= bounds.min.x && worldPosition.x <= bounds.max.x &&
+                   worldPosition.y >= bounds.min.y && worldPosition.y <= bounds.max.y;
+        }
+
+        Collider2D areaCollider = GetComponent<Collider2D>();
+        return areaCollider != null && areaCollider.OverlapPoint(worldPosition);
+    }
+
+    private void ShowDeploymentPrompt(string reason)
+    {
+        if (deploymentPrompt == null || string.IsNullOrEmpty(reason))
+        {
+            return;
+        }
+
+        deploymentPrompt.text = blockedDeploymentMessage;
+        deploymentPrompt.gameObject.SetActive(true);
+    }
+
+    private void HideDeploymentPrompt()
+    {
+        if (deploymentPrompt != null)
+        {
+            deploymentPrompt.gameObject.SetActive(false);
+        }
     }
 
     private MiningMachineItem FindMachineUnderPointer(Vector2 screenPosition)
@@ -465,7 +790,11 @@ public class MiningMachineWaitingArea : MonoBehaviour
         foreach (RaycastHit2D hit in hits)
         {
             MiningMachineItem machine = hit.collider.GetComponentInParent<MiningMachineItem>();
-            if (machine != null && machines.Contains(machine) && hit.distance < nearestDistance)
+            bool isWaitingMachine = machine != null && machines.Contains(machine);
+            bool isDeployedMachine = machine != null && deploymentArea != null &&
+                deploymentArea.IsDeployed(machine);
+            if (machine != null && (isWaitingMachine || isDeployedMachine) &&
+                hit.distance < nearestDistance)
             {
                 nearestMachine = machine;
                 nearestDistance = hit.distance;

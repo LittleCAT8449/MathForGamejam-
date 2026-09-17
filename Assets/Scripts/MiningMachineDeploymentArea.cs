@@ -22,6 +22,11 @@ public class MiningMachineDeploymentArea : MonoBehaviour
     public IEnumerable<MiningMachineItem> DeployedMachines => placements.Keys;
     public event Action MachinesChanged;
 
+    public bool IsDeployed(MiningMachineItem machine)
+    {
+        return machine != null && placements.ContainsKey(machine);
+    }
+
     /// <summary>
     /// Calculates the position a machine would occupy without changing any
     /// deployment state. The returned position is snapped to the grid whenever
@@ -196,6 +201,89 @@ public class MiningMachineDeploymentArea : MonoBehaviour
 
         placements.Remove(machine);
         machine.SetDeploymentLocation(null, default);
+        MachinesChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>
+    /// Restores a machine to a previously occupied grid position after it was
+    /// temporarily removed for dragging. This keeps the original placement
+    /// exact even when the pointer is released outside a valid destination.
+    /// </summary>
+    public bool RestoreDeployment(
+        MiningMachineItem machine,
+        Vector2Int bottomLeftCell,
+        out string reason)
+    {
+        reason = string.Empty;
+
+        if (machine == null)
+        {
+            reason = "采矿机不存在。";
+            return false;
+        }
+
+        if (placements.ContainsKey(machine))
+        {
+            reason = "这台采矿机已经部署。";
+            return false;
+        }
+
+        CacheGrid();
+        if (grid == null)
+        {
+            reason = "开采区域没有找到 GridSystem。";
+            return false;
+        }
+
+        Vector2Int footprint = machine.FootprintSize;
+        if (!grid.IsFootprintInsideGrid(bottomLeftCell, footprint))
+        {
+            reason = "原来的采矿机位置已经超出开采区域。";
+            return false;
+        }
+
+        List<Vector2Int> cells = GetOccupiedCells(machine, bottomLeftCell);
+        foreach (Vector2Int cell in cells)
+        {
+            if (occupiedCells.Contains(cell))
+            {
+                reason = "原来的格子已经被其他采矿机占用。";
+                return false;
+            }
+        }
+
+        if (!grid.TryGetFootprintCenterWorld(
+                bottomLeftCell,
+                footprint,
+                out Vector3 snappedPosition))
+        {
+            reason = "无法恢复采矿机的网格位置。";
+            return false;
+        }
+
+        machine.transform.SetParent(grid.transform, true);
+        machine.transform.position = snappedPosition;
+        Vector3 localScale = machine.transform.localScale;
+        if (machine.HasTilemapShape)
+        {
+            localScale.x = cellScale.x;
+            localScale.y = cellScale.y;
+        }
+        else
+        {
+            localScale.x = cellScale.x * footprint.x;
+            localScale.y = cellScale.y * footprint.y;
+        }
+
+        machine.transform.localScale = localScale;
+        machine.SetDeploymentLocation(this, bottomLeftCell);
+        placements.Add(machine, cells);
+        foreach (Vector2Int cell in cells)
+        {
+            occupiedCells.Add(cell);
+        }
+
         MachinesChanged?.Invoke();
         return true;
     }
