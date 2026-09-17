@@ -44,8 +44,12 @@ public class MiningMachineWaitingArea : MonoBehaviour
 
     private MiningMachineItem pressedMachine;
     private Transform originalParent;
+    private Vector3 originalLocalPosition;
+    private Quaternion originalLocalRotation;
+    private Vector3 originalLocalScale;
     private Vector2 pointerDownPosition;
     private Vector3 originalWorldPosition;
+    private int originalRotationQuarterTurns;
     private Vector3 dragOffset;
     private float pointerDepth;
     private bool isDragging;
@@ -111,6 +115,13 @@ public class MiningMachineWaitingArea : MonoBehaviour
 
         if (pressedMachine != null && mouse.leftButton.isPressed)
         {
+            UpdateDrag(pointerPosition);
+        }
+
+        if (pressedMachine != null && isDragging &&
+            Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
+        {
+            pressedMachine.RotateClockwise();
             UpdateDrag(pointerPosition);
         }
 
@@ -346,7 +357,18 @@ public class MiningMachineWaitingArea : MonoBehaviour
         hitMachine.SetDeploymentPreview(false, false);
         pointerDownPosition = screenPosition;
         originalParent = hitMachine.transform.parent;
+        originalLocalPosition = hitMachine.transform.localPosition;
+        originalLocalRotation = hitMachine.transform.localRotation;
+        originalLocalScale = hitMachine.transform.localScale;
         originalWorldPosition = hitMachine.transform.position;
+        originalRotationQuarterTurns = hitMachine.RotationQuarterTurns;
+
+        // Waiting-area parents are often scaled differently on X and Y to fit
+        // the colored region. Rotating a child under such a parent introduces
+        // shear/stretching. Detach while dragging so rotation happens under a
+        // neutral world parent, while keeping the same world transform.
+        hitMachine.transform.SetParent(null, true);
+
         pointerDepth = inputCamera.WorldToScreenPoint(originalWorldPosition).z;
         dragOffset = originalWorldPosition - ScreenToWorld(screenPosition);
         isDragging = false;
@@ -404,8 +426,11 @@ public class MiningMachineWaitingArea : MonoBehaviour
             }
             else
             {
-                machine.transform.SetParent(originalParent, true);
-                machine.transform.position = originalWorldPosition;
+                machine.transform.SetParent(originalParent, false);
+                machine.transform.localPosition = originalLocalPosition;
+                machine.transform.localRotation = originalLocalRotation;
+                machine.transform.localScale = originalLocalScale;
+                machine.RestoreRotationState(originalRotationQuarterTurns);
 
                 if (deploymentArea == null)
                 {

@@ -40,10 +40,15 @@ public class MiningMachineItem : MonoBehaviour
     public MiningMachineWaitingArea WaitingArea => waitingArea;
     public bool IsSelected { get; private set; }
     public bool IsPowered { get; private set; }
+    /// <summary>
+    /// Number of clockwise quarter-turns applied while dragging this machine.
+    /// </summary>
+    public int RotationQuarterTurns { get; private set; }
     public Vector2Int FootprintSize
     {
         get
         {
+            Vector2Int baseSize;
             if (autoFootprintFromShape)
             {
                 CustomTilemapShape shape = GetComponentInChildren<CustomTilemapShape>(true);
@@ -53,21 +58,24 @@ public class MiningMachineItem : MonoBehaviour
                             out _,
                             out Vector2Int filledSize))
                     {
-                        return new Vector2Int(
+                        baseSize = new Vector2Int(
                             Mathf.Max(1, filledSize.x),
                             Mathf.Max(1, filledSize.y));
+                        return GetRotatedSize(baseSize);
                     }
 
                     Vector2Int shapeSize = shape.ShapeData.ShapeSize;
-                    return new Vector2Int(
+                    baseSize = new Vector2Int(
                         Mathf.Max(1, shapeSize.x),
                         Mathf.Max(1, shapeSize.y));
+                    return GetRotatedSize(baseSize);
                 }
             }
 
-            return new Vector2Int(
+            baseSize = new Vector2Int(
                 Mathf.Max(1, footprintSize.x),
                 Mathf.Max(1, footprintSize.y));
+            return GetRotatedSize(baseSize);
         }
     }
     public int ProductionNumber => Mathf.Max(0, productionNumber);
@@ -89,6 +97,8 @@ public class MiningMachineItem : MonoBehaviour
 
         offsets.Clear();
 
+        Vector2Int footprint = FootprintSize;
+
         if (autoFootprintFromShape)
         {
             CustomTilemapShape shape = GetComponentInChildren<CustomTilemapShape>(true);
@@ -99,7 +109,7 @@ public class MiningMachineItem : MonoBehaviour
             {
                 foreach (Vector2Int cell in shape.ShapeData.FilledCells)
                 {
-                    offsets.Add(cell - filledMinimum);
+                    offsets.Add(RotateCell(cell - filledMinimum, shape.ShapeData, RotationQuarterTurns));
                 }
 
                 if (offsets.Count > 0)
@@ -109,7 +119,6 @@ public class MiningMachineItem : MonoBehaviour
             }
         }
 
-        Vector2Int footprint = FootprintSize;
         for (int x = 0; x < footprint.x; x++)
         {
             for (int y = 0; y < footprint.y; y++)
@@ -164,6 +173,7 @@ public class MiningMachineItem : MonoBehaviour
         transform.localPosition = homeLocalPosition;
         transform.localRotation = homeLocalRotation;
         transform.localScale = homeLocalScale;
+        RotationQuarterTurns = 0;
 
         SetDeploymentLocation(null, default);
         SetPowered(false);
@@ -176,6 +186,54 @@ public class MiningMachineItem : MonoBehaviour
     {
         DeploymentArea = area;
         BottomLeftCell = bottomLeftCell;
+    }
+
+    /// <summary>
+    /// Rotates the machine clockwise by 90 degrees. The root pivot stays in
+    /// place; the deployment system recalculates occupied cells on the next
+    /// preview/deploy check.
+    /// </summary>
+    public void RotateClockwise()
+    {
+        RotationQuarterTurns = (RotationQuarterTurns + 1) % 4;
+        transform.Rotate(0f, 0f, -90f, Space.Self);
+    }
+
+    internal void RestoreRotationState(int quarterTurns)
+    {
+        RotationQuarterTurns = ((quarterTurns % 4) + 4) % 4;
+    }
+
+    private Vector2Int GetRotatedSize(Vector2Int size)
+    {
+        return RotationQuarterTurns % 2 == 1
+            ? new Vector2Int(size.y, size.x)
+            : size;
+    }
+
+    private static Vector2Int RotateCell(
+        Vector2Int cell,
+        TilemapShapeData shapeData,
+        int quarterTurns)
+    {
+        Vector2Int size = shapeData.TryGetFilledBounds(out _, out Vector2Int filledSize)
+            ? filledSize
+            : shapeData.ShapeSize;
+
+        switch (quarterTurns % 4)
+        {
+            case 1:
+                // The visual root rotates clockwise (-90 degrees on Z).
+                // Rotate the authored cell coordinates in the same direction
+                // so logical occupancy stays aligned with what is rendered.
+                return new Vector2Int(cell.y, size.x - 1 - cell.x);
+            case 2:
+                return new Vector2Int(size.x - 1 - cell.x, size.y - 1 - cell.y);
+            case 3:
+                return new Vector2Int(size.y - 1 - cell.y, cell.x);
+            default:
+                return cell;
+        }
     }
 
     /// <summary>
