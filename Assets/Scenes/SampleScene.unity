@@ -1552,6 +1552,11 @@ MonoBehaviour:
   stampingMachine: {fileID: 476563435}
   uiObjectToClose: {fileID: 542648963}
   levelManager: {fileID: 0}
+  addButton: {fileID: 0}
+  subtractButton: {fileID: 0}
+  multiplyButton: {fileID: 0}
+  divideButton: {fileID: 0}
+  subtractModeLabel: {fileID: 0}
 --- !u!114 &542648967
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2002,7 +2007,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   stampingMachine: {fileID: 476563435}
   uiObjectToClose: {fileID: 2029455822}
-  levelManager: {fileID: 0}
+  levelManager: {fileID: 590448565}
+  addButton: {fileID: 747266141}
+  subtractButton: {fileID: 1298614089}
+  multiplyButton: {fileID: 1594813443}
+  divideButton: {fileID: 1313033539}
+  subtractModeLabel: {fileID: 762922061}
 --- !u!114 &747266143
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3096,7 +3106,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   stampingMachine: {fileID: 476563435}
   uiObjectToClose: {fileID: 2029455822}
-  levelManager: {fileID: 0}
+  levelManager: {fileID: 590448565}
+  addButton: {fileID: 747266141}
+  subtractButton: {fileID: 1298614089}
+  multiplyButton: {fileID: 1594813443}
+  divideButton: {fileID: 1313033539}
+  subtractModeLabel: {fileID: 762922061}
 --- !u!114 &1298614089
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3301,6 +3316,11 @@ MonoBehaviour:
   stampingMachine: {fileID: 476563435}
   uiObjectToClose: {fileID: 2029455822}
   levelManager: {fileID: 0}
+  addButton: {fileID: 747266141}
+  subtractButton: {fileID: 1298614089}
+  multiplyButton: {fileID: 1594813443}
+  divideButton: {fileID: 1313033539}
+  subtractModeLabel: {fileID: 762922061}
 --- !u!114 &1313033541
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3752,7 +3772,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   stampingMachine: {fileID: 476563435}
   uiObjectToClose: {fileID: 2029455822}
-  levelManager: {fileID: 0}
+  levelManager: {fileID: 590448565}
+  addButton: {fileID: 747266141}
+  subtractButton: {fileID: 1298614089}
+  multiplyButton: {fileID: 1594813443}
+  divideButton: {fileID: 1313033539}
+  subtractModeLabel: {fileID: 762922061}
 --- !u!114 &1594813445
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4750,8 +4775,8 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 747266140}
-  - {fileID: 1298614087}
   - {fileID: 1594813442}
+  - {fileID: 1298614087}
   - {fileID: 1313033538}
   - {fileID: 542648964}
   m_Father: {fileID: 1247095595}

@@ -29,7 +29,10 @@ public class StampingMachine : MonoBehaviour
     private Vector2 initialPosition;
     private decimal result;
     private bool hasOperand;
+    private int operandCount;
     private bool calculationValid;
+    private bool negativeSubtractMode;
+    private bool subtractModeInitialized;
     private bool isMoving;
     private bool isReturning;
     private Collider2D[] pressColliders;
@@ -54,12 +57,52 @@ public class StampingMachine : MonoBehaviour
     public StampOperation Operation => operation;
 
     /// <summary>
+    /// True when subtraction uses smaller minus larger, producing a negative
+    /// result for the first two operands.
+    /// </summary>
+    public bool IsNegativeSubtractMode => negativeSubtractMode;
+
+    /// <summary>
+    /// Indicates whether the current round has already selected subtraction
+    /// once. This lets the first click start in positive mode.
+    /// </summary>
+    public bool HasSelectedSubtractMode => subtractModeInitialized;
+
+    /// <summary>
     /// Changes the operation used when the press reads its number tokens.
     /// </summary>
     public void SetOperation(StampOperation selectedOperation)
     {
         operation = selectedOperation;
+        if (selectedOperation != StampOperation.Subtract)
+        {
+            subtractModeInitialized = false;
+            negativeSubtractMode = false;
+        }
+
         Debug.Log($"冲压运算已设置为：{operation}。", this);
+    }
+
+    /// <summary>
+    /// Sets the subtraction mode. Positive mode is larger minus smaller;
+    /// negative mode is smaller minus larger.
+    /// </summary>
+    public void SetSubtractNegativeMode(bool enabled)
+    {
+        negativeSubtractMode = enabled;
+        subtractModeInitialized = true;
+        Debug.Log(
+            $"减法模式已设置为：{(enabled ? "负数模式（小数-大数）" : "正数模式（大数-小数）")}。",
+            this);
+    }
+
+    /// <summary>
+    /// Switches between positive and negative subtraction mode.
+    /// </summary>
+    public bool ToggleSubtractMode()
+    {
+        SetSubtractNegativeMode(!negativeSubtractMode);
+        return negativeSubtractMode;
     }
 
     private void Awake()
@@ -147,6 +190,7 @@ public class StampingMachine : MonoBehaviour
         consumedTokens.Clear();
         result = 0m;
         hasOperand = false;
+        operandCount = 0;
         calculationValid = true;
         isMoving = true;
         HasStartedStamping = true;
@@ -206,6 +250,7 @@ public class StampingMachine : MonoBehaviour
         {
             result = value;
             hasOperand = true;
+            operandCount = 1;
             Debug.Log($"冲压读取首个数字：{value}。", token);
             return;
         }
@@ -223,7 +268,18 @@ public class StampingMachine : MonoBehaviour
                     result += value;
                     break;
                 case StampOperation.Subtract:
-                    result -= value;
+                    if (operandCount == 1)
+                    {
+                        decimal larger = result >= value ? result : value;
+                        decimal smaller = result >= value ? value : result;
+                        result = negativeSubtractMode
+                            ? smaller - larger
+                            : larger - smaller;
+                    }
+                    else
+                    {
+                        result -= value;
+                    }
                     break;
                 case StampOperation.Multiply:
                     result *= value;
@@ -241,6 +297,7 @@ public class StampingMachine : MonoBehaviour
             }
 
             Debug.Log($"冲压读取数字 {value}，当前结果：{result}。", token);
+            operandCount++;
         }
         catch (System.OverflowException)
         {
@@ -452,7 +509,10 @@ public class StampingMachine : MonoBehaviour
         HasStartedStamping = false;
         HasStartedAnyStampingThisRound = false;
         hasOperand = false;
+        operandCount = 0;
         calculationValid = false;
+        negativeSubtractMode = false;
+        subtractModeInitialized = false;
         consumedTokens.Clear();
         pressBody.linearVelocity = Vector2.zero;
         pressBody.position = initialPosition;

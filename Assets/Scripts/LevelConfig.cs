@@ -5,6 +5,7 @@ using UnityEngine;
 public enum LevelRewardType
 {
     UnlockOperation,
+    /// <summary>永久解锁小数减大数的负数减法模式。</summary>
     UnlockNegativeSubtraction,
     UnlockMiningMachine
 }
@@ -14,6 +15,7 @@ public class LevelRewardConfig
 {
     [Tooltip("用于永久存档的唯一 ID。留空时会根据奖励内容自动生成。")]
     [SerializeField] private string rewardId;
+    [Tooltip("奖励类型。选择 UnlockNegativeSubtraction 后，完成关卡会永久解锁小数-大数的负数减法模式。")]
     [SerializeField] private LevelRewardType rewardType;
     [SerializeField] private StampOperation operation;
     [SerializeField] private MiningMachineItem machinePrefab;

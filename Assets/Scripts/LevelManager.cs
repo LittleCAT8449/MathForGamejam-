@@ -39,6 +39,11 @@ public class LevelManager : MonoBehaviour
     private bool isAdvancingLevel;
     private readonly List<decimal> currentTargets = new List<decimal>();
 
+    /// <summary>
+    /// Raised when a reward changes which operation buttons are available.
+    /// </summary>
+    public event Action OperationAvailabilityChanged;
+
     public IReadOnlyList<LevelConfig> Levels => levels;
     public LevelConfig CurrentLevel => currentLevel;
     public int CurrentLevelIndex => currentLevelIndex;
@@ -146,6 +151,7 @@ public class LevelManager : MonoBehaviour
 
         currentLevel = config;
         currentLevelIndex = index;
+        OperationAvailabilityChanged?.Invoke();
         UpdateTargetLabel();
         Debug.Log(
             $"已加载关卡 {config.DisplayName}，目标数字：{config.TargetNumbersText}。",
@@ -360,6 +366,10 @@ public class LevelManager : MonoBehaviour
             }
         }
 
+        // A reward may have unlocked a new operation. Refresh any open
+        // operation-selection UI immediately, before the next level loads.
+        OperationAvailabilityChanged?.Invoke();
+
         SyncUnlockedMachineRewards();
 
         SaveProgress();
@@ -477,6 +487,8 @@ public class LevelManager : MonoBehaviour
         {
             progress.unlockedOperations.Add(StampOperation.Add);
         }
+
+        OperationAvailabilityChanged?.Invoke();
     }
 
     private void UpdateTargetLabel()
