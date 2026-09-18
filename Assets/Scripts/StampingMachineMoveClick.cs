@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Attach to a clickable 2D object to call StampingMachine.Move().
+/// Attach to a clickable Sprite/2D object to call StampingMachine.Move().
 /// </summary>
 [RequireComponent(typeof(BoxCollider2D))]
 public class StampingMachineMoveClick : MonoBehaviour
@@ -69,6 +69,11 @@ public class StampingMachineMoveClick : MonoBehaviour
         {
             Debug.LogWarning("无法启动冲压：没有指定 StampingMachine。", this);
             return;
+        }
+
+        if (stampingMachine.CanStartMove)
+        {
+            GameAudioManager.Instance?.PlayLeverPull();
         }
 
         stampingMachine.Move();

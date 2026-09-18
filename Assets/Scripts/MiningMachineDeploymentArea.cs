@@ -180,6 +180,7 @@ public class MiningMachineDeploymentArea : MonoBehaviour
 
         Debug.Log($"采矿机 {machine.name} 已部署到格子 {bottomLeftCell}。", machine);
         MachinesChanged?.Invoke();
+        GameAudioManager.Instance?.PlayPlaceMiningMachine();
         return true;
     }
 

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 [Serializable]
 public class LevelProgressData
@@ -106,6 +107,15 @@ public class LevelManager : MonoBehaviour
             Debug.LogWarning(
                 $"{name}：没有配置关卡，请在 Inspector 的 Levels 中添加 LevelConfig。",
                 this);
+        }
+    }
+
+    private void Update()
+    {
+        if (Keyboard.current != null &&
+            Keyboard.current.f8Key.wasPressedThisFrame)
+        {
+            ClearCompletedLevelsForTesting();
         }
     }
 
@@ -270,10 +280,56 @@ public class LevelManager : MonoBehaviour
         SyncUnlockedMachineRewards();
     }
 
+    /// <summary>
+    /// Clears saved level completion and rewards so the level flow can be
+    /// tested from the beginning. Bound to the F8 debug shortcut.
+    /// </summary>
+    public void ClearCompletedLevelsForTesting()
+    {
+        if (progress == null)
+        {
+            progress = new LevelProgressData();
+        }
+
+        progress.highestUnlockedLevelIndex = 0;
+        progress.completedLevelIds.Clear();
+        progress.unlockedRewardIds.Clear();
+        progress.unlockedOperations.Clear();
+        progress.unlockedOperations.Add(StampOperation.Add);
+        progress.negativeSubtractUnlocked = false;
+
+        StopAllCoroutines();
+        isAdvancingLevel = false;
+        SaveProgress();
+
+        GameResetClick resetClick = FindFirstObjectByType<GameResetClick>();
+        if (resetClick != null)
+        {
+            resetClick.ResetRoundImmediately();
+        }
+
+        if (levels != null && levels.Count > 0)
+        {
+            int levelToLoad = Mathf.Clamp(startingLevelIndex, 0, levels.Count - 1);
+            LoadLevel(levelToLoad);
+        }
+
+        SyncUnlockedMachineRewards();
+        Debug.Log("F8：已清除通关记录、奖励和运算解锁，回到初始关卡。", this);
+    }
+
     private void HandleNumberPlaced(NumberToken token)
     {
-        if (token == null || currentLevel == null || IsCurrentLevelCompleted)
+        if (token == null || currentLevel == null)
         {
+            return;
+        }
+
+        if (IsCurrentLevelCompleted)
+        {
+            Debug.Log(
+                $"关卡 {currentLevel.DisplayName} 已在存档中完成，本次交付不会重复触发通关。",
+                this);
             return;
         }
 

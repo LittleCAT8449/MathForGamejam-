@@ -69,6 +69,12 @@ public class StampingMachine : MonoBehaviour
     public bool HasSelectedSubtractMode => subtractModeInitialized;
 
     /// <summary>
+    /// True when a new press cycle can be started. This is used by the lever
+    /// click component so it does not play a sound for a blocked click.
+    /// </summary>
+    public bool CanStartMove => !isMoving && !isReturning && anvilCollider != null;
+
+    /// <summary>
     /// Changes the operation used when the press reads its number tokens.
     /// </summary>
     public void SetOperation(StampOperation selectedOperation)
@@ -209,6 +215,7 @@ public class StampingMachine : MonoBehaviour
         pressBody.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
         pressBody.linearVelocity = Vector2.down * moveSpeed;
 
+        GameAudioManager.Instance?.PlayStampingWork();
         Debug.Log($"冲压机开始下压，运算方式：{operation}。", this);
     }
 
