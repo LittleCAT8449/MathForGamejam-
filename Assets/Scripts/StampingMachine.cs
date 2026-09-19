@@ -433,7 +433,7 @@ public class StampingMachine : MonoBehaviour
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-            float progress = Mathf.SmoothStep(0f, 1f, elapsed / duration);
+            float progress = EvaluatePiecewiseQuadratic(elapsed / duration);
 
             for (int i = 0; i < tokens.Count; i++)
             {
@@ -451,6 +451,7 @@ public class StampingMachine : MonoBehaviour
         {
             if (token != null)
             {
+                token.SetConvergencePosition(convergencePoint);
                 Destroy(token.gameObject);
             }
         }
@@ -463,6 +464,24 @@ public class StampingMachine : MonoBehaviour
         }
 
         isConvergingTokens = false;
+    }
+
+    /// <summary>
+    /// Piecewise quadratic ease-in/ease-out. The first half accelerates toward
+    /// the convergence point, and the second half decelerates into it.
+    /// </summary>
+    private static float EvaluatePiecewiseQuadratic(float normalizedTime)
+    {
+        float time = Mathf.Clamp01(normalizedTime);
+        if (time < 0.5f)
+        {
+            float firstHalf = time * 2f;
+            return 0.5f * firstHalf * firstHalf;
+        }
+
+        float secondHalf = (time - 0.5f) * 2f;
+        float remaining = 1f - secondHalf;
+        return 0.5f + 0.5f * (1f - remaining * remaining);
     }
 
     private void CreateResultToken()
