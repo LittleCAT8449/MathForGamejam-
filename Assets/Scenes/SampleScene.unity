@@ -838,13 +838,12 @@ MonoBehaviour:
   machineLayerMask:
     serializedVersion: 2
     m_Bits: 51
-  machines:
-  - {fileID: 1357134379307912358, guid: 112699ab30eda4d4db9e79d60439f0fa, type: 3}
+  machines: []
   deploymentArea: {fileID: 289951037}
   dragThresholdPixels: 8
   deploymentPrompt: {fileID: 762922061}
   blockedDeploymentMessage: "\u533A\u57DF\u5DF2\u5360\u7528\uFF0C\u65E0\u6CD5\u90E8\u7F72/\u65CB\u8F6C"
-  spawnInitialMachines: 1
+  spawnInitialMachines: 0
   initialMachines:
   - prefab: {fileID: 1357134379307912358, guid: 112699ab30eda4d4db9e79d60439f0fa, type: 3}
     count: 0
@@ -1185,6 +1184,7 @@ MonoBehaviour:
   resultPrefab: {fileID: 4913567184706658751, guid: 4e2215a9d6d77e64aaf26888f8dc2079, type: 3}
   resultSpawnPoint: {fileID: 1914041479}
   settlementArea: {fileID: 0}
+  numberBreakEffect: {fileID: -8527675787055405972, guid: 4e2215a9d6d77e64aaf26888f8dc2079, type: 3}
   operation: 0
   moveSpeed: 5
   returnSpeed: 5
@@ -1274,7 +1274,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   targetObject: {fileID: 2029455822}
-  inputCamera: {fileID: 0}
+  inputCamera: {fileID: 519420031}
   clickableLayers:
     serializedVersion: 2
     m_Bits: 51
@@ -2480,7 +2480,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: -1
   m_Sprite: {fileID: 21300000, guid: 895121bf826e5aa4cbc6351f46ad0805, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -4738,7 +4738,7 @@ MonoBehaviour:
   inputCamera: {fileID: 519420031}
   clickableLayers:
     serializedVersion: 2
-    m_Bits: 51
+    m_Bits: 115
 --- !u!61 &1810646483
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -4828,7 +4828,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: 1
   m_Sprite: {fileID: 21300000, guid: c903d7c52fd8ae249a032029d61a21d6, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0

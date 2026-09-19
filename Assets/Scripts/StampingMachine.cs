@@ -21,6 +21,7 @@ public class StampingMachine : MonoBehaviour
     [SerializeField] private NumberToken resultPrefab;
     [SerializeField] private Transform resultSpawnPoint;
     [SerializeField] private SettlementArea settlementArea;
+    [SerializeField] private NumberBreakEffect numberBreakEffect;
     [SerializeField] private StampOperation operation = StampOperation.Add;
     [SerializeField, Min(0.01f)] private float moveSpeed = 5f;
     [SerializeField, Min(0.01f)] private float returnSpeed = 5f;
@@ -121,6 +122,11 @@ public class StampingMachine : MonoBehaviour
         if (settlementArea == null)
         {
             settlementArea = FindFirstObjectByType<SettlementArea>();
+        }
+
+        if (numberBreakEffect == null)
+        {
+            numberBreakEffect = GetComponent<NumberBreakEffect>();
         }
 
         pressColliders = GetComponentsInChildren<Collider2D>(true);
@@ -370,6 +376,10 @@ public class StampingMachine : MonoBehaviour
         }
 
         ApplyOperand(token.Value, token);
+        NumberBreakEffect breakEffect = numberBreakEffect != null
+            ? numberBreakEffect
+            : token.GetComponent<NumberBreakEffect>();
+        breakEffect?.Play(token);
         Destroy(token.gameObject);
 
         // Contact with a token can change a dynamic body's velocity. Keep the

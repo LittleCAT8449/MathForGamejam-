@@ -189,6 +189,7 @@ GameObject:
   - component: {fileID: 8723339916965396157}
   - component: {fileID: 3853915488417590514}
   - component: {fileID: 4913567184706658751}
+  - component: {fileID: -8527675787055405972}
   m_Layer: 0
   m_Name: NumberObject
   m_TagString: Untagged
@@ -281,3 +282,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   valueLabel: {fileID: 815539899760512869}
   labelColor: {r: 0, g: 0, b: 0, a: 1}
+  selectedColor: {r: 1, g: 0.85, b: 0.2, a: 1}
+--- !u!114 &-8527675787055405972
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3163345643971467157}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 507f86d28d4f4325a90739ebebee6fc1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  columns: 3
+  rows: 3
+  lifetime: 0.45
+  burstSpeed: 1.8
+  upwardBias: 0.35
+  gravityScale: 0.8
+  randomRotationSpeed: 360

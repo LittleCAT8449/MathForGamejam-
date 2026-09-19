@@ -17,6 +17,31 @@ public class NumberToken : MonoBehaviour
     public bool IsSelected { get; private set; }
     public static NumberToken SelectedToken { get; private set; }
 
+    /// <summary>
+    /// The background sprite used by the break effect.
+    /// </summary>
+    public SpriteRenderer VisualRenderer
+    {
+        get
+        {
+            CacheComponents();
+            return spriteRenderer;
+        }
+    }
+
+    /// <summary>
+    /// Hides only the world-space TMP label. The SpriteRenderer remains
+    /// available so the break effect can create fragments from it.
+    /// </summary>
+    public void HideValueLabelForBreak()
+    {
+        CacheComponents();
+        if (valueLabel != null)
+        {
+            valueLabel.gameObject.SetActive(false);
+        }
+    }
+
     private SpriteRenderer spriteRenderer;
     private Color originalSpriteColor;
     private bool originalSpriteColorCached;
