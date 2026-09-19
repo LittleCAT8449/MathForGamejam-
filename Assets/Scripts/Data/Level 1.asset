@@ -22,3 +22,11 @@ MonoBehaviour:
     rewardType: 2
     operation: 0
     machinePrefab: {fileID: 1357134379307912358, guid: 112699ab30eda4d4db9e79d60439f0fa, type: 3}
+  - rewardId: unlock_subtract_negative
+    rewardType: 1
+    operation: 1
+    machinePrefab: {fileID: 0}
+  - rewardId: unlock_subtract_negative
+    rewardType: 1
+    operation: 1
+    machinePrefab: {fileID: 0}

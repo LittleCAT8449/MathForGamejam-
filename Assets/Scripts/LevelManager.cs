@@ -494,6 +494,14 @@ public class LevelManager : MonoBehaviour
                 progress.negativeSubtractUnlocked = true;
                 Debug.Log("永久解锁减法负数模式。", this);
                 break;
+            case LevelRewardType.UnlockPositiveSubtraction:
+                if (!progress.unlockedOperations.Contains(StampOperation.Subtract))
+                {
+                    progress.unlockedOperations.Add(StampOperation.Subtract);
+                }
+
+                Debug.Log("永久解锁减法正数模式。", this);
+                break;
             case LevelRewardType.UnlockMiningMachine:
                 string machineName = reward.MachinePrefab != null
                     ? reward.MachinePrefab.name

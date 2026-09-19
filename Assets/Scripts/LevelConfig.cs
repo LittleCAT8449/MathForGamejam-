@@ -7,7 +7,9 @@ public enum LevelRewardType
     UnlockOperation,
     /// <summary>永久解锁小数减大数的负数减法模式。</summary>
     UnlockNegativeSubtraction,
-    UnlockMiningMachine
+    UnlockMiningMachine,
+    /// <summary>永久解锁大数减小数的正数减法模式。</summary>
+    UnlockPositiveSubtraction
 }
 
 [Serializable]
@@ -15,7 +17,7 @@ public class LevelRewardConfig
 {
     [Tooltip("用于永久存档的唯一 ID。留空时会根据奖励内容自动生成。")]
     [SerializeField] private string rewardId;
-    [Tooltip("奖励类型。选择 UnlockNegativeSubtraction 后，完成关卡会永久解锁小数-大数的负数减法模式。")]
+    [Tooltip("奖励类型。可直接选择正数减法或负数减法模式。")]
     [SerializeField] private LevelRewardType rewardType;
     [SerializeField] private StampOperation operation;
     [SerializeField] private MiningMachineItem machinePrefab;
@@ -38,6 +40,8 @@ public class LevelRewardConfig
                 return $"{levelId}:operation:{operation}";
             case LevelRewardType.UnlockNegativeSubtraction:
                 return $"{levelId}:subtract-negative";
+            case LevelRewardType.UnlockPositiveSubtraction:
+                return $"{levelId}:subtract-positive";
             case LevelRewardType.UnlockMiningMachine:
                 string machineName = machinePrefab != null
                     ? machinePrefab.name
