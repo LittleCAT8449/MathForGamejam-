@@ -259,8 +259,8 @@
     <Compile Include="Library\PackageCache\com.unity.collab-proxy\Editor\Views\Labels\Dialogs\CreateLabelViewUIToolkit.cs" />
     <Compile Include="Library\PackageCache\com.unity.collab-proxy\Editor\UI\UIElements\ControlBuilder.cs" />
     <Compile Include="Library\PackageCache\com.unity.collab-proxy\Editor\Diff\Image\Views\OnionSkin\OnionSkinView.cs" />
-    <Compile Include="Library\PackageCache\com.unity.collab-proxy\Editor\CloudDrive\Workspaces\DirectoryContent\ItemsPosition.cs" />
     <Compile Include="Library\PackageCache\com.unity.collab-proxy\Editor\Diff\Text\ChangeFont.cs" />
+    <Compile Include="Library\PackageCache\com.unity.collab-proxy\Editor\CloudDrive\Workspaces\DirectoryContent\ItemsPosition.cs" />
     <Compile Include="Library\PackageCache\com.unity.collab-proxy\Editor\UI\Tree\PlasticTreeView.cs" />
     <Compile Include="Library\PackageCache\com.unity.collab-proxy\Editor\Diff\SyntaxHighlight\UnitySyntaxLanguages.cs" />
     <Compile Include="Library\PackageCache\com.unity.collab-proxy\Editor\CodeEditor\Document\WeakLineTracker.cs" />
