@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using System.Collections;
 using System.Globalization;
 
 /// <summary>
@@ -15,6 +16,7 @@ public class NumberToken : MonoBehaviour
 
     public decimal Value { get; private set; }
     public bool IsSelected { get; private set; }
+    public bool IsConsumed { get; private set; }
     public static NumberToken SelectedToken { get; private set; }
 
     /// <summary>
@@ -30,21 +32,134 @@ public class NumberToken : MonoBehaviour
     }
 
     /// <summary>
-    /// Hides only the world-space TMP label. The SpriteRenderer remains
-    /// available so the break effect can create fragments from it.
+    /// Keeps this number object alive after it is consumed. The background
+    /// square fades out while the TMP value remains visible, and the token is
+    /// made non-interactive so it cannot be consumed or dragged again.
     /// </summary>
-    public void HideValueLabelForBreak()
+    public void MarkConsumedAndFade(float duration)
     {
         CacheComponents();
-        if (valueLabel != null)
+        LockAfterConsumption();
+
+        if (fadeCoroutine != null)
         {
-            valueLabel.gameObject.SetActive(false);
+            StopCoroutine(fadeCoroutine);
         }
+
+        fadeCoroutine = StartCoroutine(FadeSpriteToTransparent(duration));
+    }
+
+    /// <summary>
+    /// Locks a token for the stamping convergence animation without fading or
+    /// destroying it. The caller can move the whole token, including its TMP
+    /// label, and destroy it after the group has converged.
+    /// </summary>
+    public void MarkConsumedForConvergence()
+    {
+        CacheComponents();
+        LockAfterConsumption();
+    }
+
+    /// <summary>
+    /// Locks a token and makes only its SpriteRenderer fully transparent
+    /// immediately. The TMP value remains active until the caller destroys
+    /// the token after the convergence animation.
+    /// </summary>
+    public void MarkConsumedAndHide()
+    {
+        CacheComponents();
+        LockAfterConsumption();
+
+        if (fadeCoroutine != null)
+        {
+            StopCoroutine(fadeCoroutine);
+            fadeCoroutine = null;
+        }
+
+        if (spriteRenderer != null)
+        {
+            Color color = spriteRenderer.color;
+            color.a = 0f;
+            spriteRenderer.color = color;
+        }
+    }
+
+    /// <summary>
+    /// Moves the complete number object while it is converging with the other
+    /// numbers.
+    /// </summary>
+    public void SetConvergencePosition(Vector3 worldPosition)
+    {
+        worldPosition.z = transform.position.z;
+        transform.position = worldPosition;
     }
 
     private SpriteRenderer spriteRenderer;
     private Color originalSpriteColor;
     private bool originalSpriteColorCached;
+    private Coroutine fadeCoroutine;
+
+    private void LockAfterConsumption()
+    {
+        IsConsumed = true;
+        SetSelected(false);
+
+        foreach (Collider2D collider in GetComponentsInChildren<Collider2D>(true))
+        {
+            if (collider != null)
+            {
+                collider.enabled = false;
+            }
+        }
+
+        NumberTokenDrag drag = GetComponent<NumberTokenDrag>();
+        if (drag != null)
+        {
+            drag.enabled = false;
+        }
+
+        // A token dropped into the stamping area may already have a dynamic
+        // Rigidbody2D. Freeze it so the TMP label does not fall during the
+        // convergence animation.
+        Rigidbody2D body = GetComponent<Rigidbody2D>();
+        if (body != null)
+        {
+            body.linearVelocity = Vector2.zero;
+            body.angularVelocity = 0f;
+            body.gravityScale = 0f;
+            body.bodyType = RigidbodyType2D.Kinematic;
+        }
+    }
+
+    private IEnumerator FadeSpriteToTransparent(float duration)
+    {
+        float safeDuration = Mathf.Max(0.01f, duration);
+        Color startColor = spriteRenderer != null ? spriteRenderer.color : Color.white;
+        float elapsed = 0f;
+
+        while (elapsed < safeDuration)
+        {
+            elapsed += Time.deltaTime;
+            float progress = Mathf.Clamp01(elapsed / safeDuration);
+            if (spriteRenderer != null)
+            {
+                Color color = startColor;
+                color.a = Mathf.Lerp(startColor.a, 0f, progress);
+                spriteRenderer.color = color;
+            }
+
+            yield return null;
+        }
+
+        if (spriteRenderer != null)
+        {
+            Color color = spriteRenderer.color;
+            color.a = 0f;
+            spriteRenderer.color = color;
+        }
+
+        fadeCoroutine = null;
+    }
 
     private void Awake()
     {

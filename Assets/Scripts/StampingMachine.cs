@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -25,8 +26,10 @@ public class StampingMachine : MonoBehaviour
     [SerializeField] private StampOperation operation = StampOperation.Add;
     [SerializeField, Min(0.01f)] private float moveSpeed = 5f;
     [SerializeField, Min(0.01f)] private float returnSpeed = 5f;
+    [SerializeField, Min(0.01f)] private float tokenConvergenceDuration = 0.35f;
 
     private readonly HashSet<NumberToken> consumedTokens = new HashSet<NumberToken>();
+    private readonly List<NumberToken> consumedTokenList = new List<NumberToken>();
     private Vector2 initialPosition;
     private decimal result;
     private bool hasOperand;
@@ -36,6 +39,7 @@ public class StampingMachine : MonoBehaviour
     private bool subtractModeInitialized;
     private bool isMoving;
     private bool isReturning;
+    private bool isConvergingTokens;
     private Collider2D[] pressColliders;
     private readonly List<Collider2D> ignoredTokenColliders = new List<Collider2D>();
 
@@ -73,7 +77,7 @@ public class StampingMachine : MonoBehaviour
     /// True when a new press cycle can be started. This is used by the lever
     /// click component so it does not play a sound for a blocked click.
     /// </summary>
-    public bool CanStartMove => !isMoving && !isReturning && anvilCollider != null;
+    public bool CanStartMove => !isMoving && !isReturning && !isConvergingTokens && anvilCollider != null;
 
     /// <summary>
     /// Changes the operation used when the press reads its number tokens.
@@ -188,7 +192,7 @@ public class StampingMachine : MonoBehaviour
     /// </summary>
     public void Move()
     {
-        if (isMoving || isReturning)
+        if (isMoving || isReturning || isConvergingTokens)
         {
             return;
         }
@@ -200,6 +204,7 @@ public class StampingMachine : MonoBehaviour
         }
 
         consumedTokens.Clear();
+        consumedTokenList.Clear();
         result = 0m;
         hasOperand = false;
         operandCount = 0;
@@ -249,7 +254,7 @@ public class StampingMachine : MonoBehaviour
         }
 
         NumberToken token = other.GetComponentInParent<NumberToken>();
-        if (token == null || !consumedTokens.Add(token))
+        if (token == null || token.IsConsumed || !consumedTokens.Add(token))
         {
             return;
         }
@@ -334,38 +339,32 @@ public class StampingMachine : MonoBehaviour
         if (!hasOperand)
         {
             Debug.LogWarning("冲压机碰到砧板，但途中没有碰到数字，没有生成结果。", this);
+            BeginReturning();
+            return;
         }
-        else if (!calculationValid)
+
+        if (!calculationValid)
         {
             Debug.LogWarning("冲压计算无效，没有生成结果数字。", this);
         }
-        else if (resultPrefab == null)
+
+        if (resultPrefab == null)
         {
             Debug.LogError("冲压计算完成，但没有指定结果数字 Prefab。", this);
         }
-        else
+
+        if (consumedTokenList.Count == 0)
         {
-            Vector3 spawnPosition = resultSpawnPoint != null
-                ? resultSpawnPoint.position
-                : transform.position;
-            NumberToken resultToken = Instantiate(resultPrefab, spawnPosition, resultPrefab.transform.rotation);
-            resultToken.SetValue(result);
-
-            if (settlementArea != null)
-            {
-                settlementArea.PrepareForDelivery(resultToken);
-            }
-
-            // The result is intentionally left in the stamping area for the
-            // player to drag away. It must not physically block the press while
-            // the press returns to its initial position.
-            IgnoreTokenCollision(resultToken);
-
-            Debug.Log($"冲压完成，结果：{result}。", resultToken);
+            Debug.LogWarning("冲压没有可收拢的数字对象。", this);
+            BeginReturning();
+            return;
         }
 
-        isReturning = true;
-        pressBody.linearVelocity = Vector2.up * returnSpeed;
+        isConvergingTokens = true;
+        // Start the press return immediately. The number convergence runs in
+        // parallel so it does not add extra waiting time to the lift motion.
+        BeginReturning();
+        StartCoroutine(ConvergeTokensThenFinish());
     }
 
     private void ConsumeToken(NumberToken token)
@@ -376,11 +375,23 @@ public class StampingMachine : MonoBehaviour
         }
 
         ApplyOperand(token.Value, token);
+
         NumberBreakEffect breakEffect = numberBreakEffect != null
             ? numberBreakEffect
             : token.GetComponent<NumberBreakEffect>();
-        breakEffect?.Play(token);
-        Destroy(token.gameObject);
+        if (breakEffect != null)
+        {
+            // This fades the original SpriteRenderer and creates the visual
+            // fragments. The token itself remains alive until the group
+            // convergence finishes below, so its TMP value is still visible.
+            breakEffect.Play(token, tokenConvergenceDuration);
+        }
+        else
+        {
+            token.MarkConsumedAndHide();
+        }
+
+        consumedTokenList.Add(token);
 
         // Contact with a token can change a dynamic body's velocity. Keep the
         // press descending until the anvil is reached.
@@ -388,6 +399,97 @@ public class StampingMachine : MonoBehaviour
         {
             pressBody.linearVelocity = Vector2.down * moveSpeed;
         }
+    }
+
+    private IEnumerator ConvergeTokensThenFinish()
+    {
+        List<NumberToken> tokens = new List<NumberToken>();
+        Vector3 convergencePoint = Vector3.zero;
+
+        foreach (NumberToken token in consumedTokenList)
+        {
+            if (token == null)
+            {
+                continue;
+            }
+
+            tokens.Add(token);
+            convergencePoint += token.transform.position;
+        }
+
+        if (tokens.Count > 0)
+        {
+            convergencePoint /= tokens.Count;
+        }
+
+        Vector3[] startPositions = new Vector3[tokens.Count];
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            startPositions[i] = tokens[i].transform.position;
+        }
+
+        float duration = Mathf.Max(0.01f, tokenConvergenceDuration);
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float progress = Mathf.SmoothStep(0f, 1f, elapsed / duration);
+
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                if (tokens[i] != null)
+                {
+                    tokens[i].SetConvergencePosition(
+                        Vector3.Lerp(startPositions[i], convergencePoint, progress));
+                }
+            }
+
+            yield return null;
+        }
+
+        foreach (NumberToken token in tokens)
+        {
+            if (token != null)
+            {
+                Destroy(token.gameObject);
+            }
+        }
+
+        consumedTokenList.Clear();
+
+        if (calculationValid && resultPrefab != null)
+        {
+            CreateResultToken();
+        }
+
+        isConvergingTokens = false;
+    }
+
+    private void CreateResultToken()
+    {
+        Vector3 spawnPosition = resultSpawnPoint != null
+            ? resultSpawnPoint.position
+            : transform.position;
+        NumberToken resultToken = Instantiate(resultPrefab, spawnPosition, resultPrefab.transform.rotation);
+        resultToken.SetValue(result);
+
+        if (settlementArea != null)
+        {
+            settlementArea.PrepareForDelivery(resultToken);
+        }
+
+        // The result is intentionally left in the stamping area for the
+        // player to drag away. It must not physically block the press while
+        // the press returns to its initial position.
+        IgnoreTokenCollision(resultToken);
+
+        Debug.Log($"冲压完成，结果：{result}。", resultToken);
+    }
+
+    private void BeginReturning()
+    {
+        isReturning = true;
+        pressBody.linearVelocity = Vector2.up * returnSpeed;
     }
 
     private void ConsumeOverlappingTokens()
@@ -400,7 +502,7 @@ public class StampingMachine : MonoBehaviour
         NumberToken[] tokens = FindObjectsByType<NumberToken>(FindObjectsSortMode.None);
         foreach (NumberToken token in tokens)
         {
-            if (token == null || consumedTokens.Contains(token))
+            if (token == null || token.IsConsumed || consumedTokens.Contains(token))
             {
                 continue;
             }
@@ -521,8 +623,10 @@ public class StampingMachine : MonoBehaviour
     /// </summary>
     public void ResetPress()
     {
+        StopAllCoroutines();
         isMoving = false;
         isReturning = false;
+        isConvergingTokens = false;
         HasStartedStamping = false;
         HasStartedAnyStampingThisRound = false;
         hasOperand = false;
@@ -531,6 +635,7 @@ public class StampingMachine : MonoBehaviour
         negativeSubtractMode = false;
         subtractModeInitialized = false;
         consumedTokens.Clear();
+        consumedTokenList.Clear();
         pressBody.linearVelocity = Vector2.zero;
         pressBody.position = initialPosition;
         pressBody.gravityScale = 0f;
