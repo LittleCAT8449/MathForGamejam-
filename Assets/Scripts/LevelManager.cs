@@ -32,12 +32,23 @@ public class LevelManager : MonoBehaviour
     [SerializeField] private TMP_Text targetLabel;
     [SerializeField] private bool loadStartingLevelOnAwake = true;
 
+    [Header("关卡目标提示")]
+    [Tooltip("显示当前关卡需要提交的数字，可使用 TextMeshPro 或 TextMeshProUGUI。")]
+    [SerializeField] private TMP_Text requiredNumbersLabel;
+    [SerializeField] private string requiredNumbersFormat = "本关需要提交：{0}";
+
+    [Header("通关提示")]
+    [Tooltip("最后一关通关后显示的 TextMeshPro 文本。可以使用 TextMeshPro 或 TextMeshProUGUI。")]
+    [SerializeField] private TMP_Text completionLabel;
+    [SerializeField] private string completionMessage = "通关完成！按 Y 键重新开始";
+
     private const string ProgressFileName = "level_progress.json";
 
     private LevelProgressData progress;
     private LevelConfig currentLevel;
     private int currentLevelIndex = -1;
     private bool isAdvancingLevel;
+    private bool gameCompleted;
     private readonly List<decimal> currentTargets = new List<decimal>();
 
     /// <summary>
@@ -54,6 +65,7 @@ public class LevelManager : MonoBehaviour
         progress.completedLevelIds.Contains(currentLevel.LevelId);
     public bool IsNegativeSubtractUnlocked =>
         progress != null && progress.negativeSubtractUnlocked;
+    public bool IsGameCompleted => gameCompleted;
 
     private string ProgressPath =>
         Path.Combine(Application.persistentDataPath, ProgressFileName);
@@ -61,6 +73,8 @@ public class LevelManager : MonoBehaviour
     private void Awake()
     {
         LoadProgress();
+        HideCompletionMessage();
+        UpdateTargetLabel();
 
         if (settlementArea == null)
         {
@@ -108,6 +122,11 @@ public class LevelManager : MonoBehaviour
                 $"{name}：没有配置关卡，请在 Inspector 的 Levels 中添加 LevelConfig。",
                 this);
         }
+
+        if (HasCompletedAllLevels())
+        {
+            ShowCompletionMessage();
+        }
     }
 
     private void Update()
@@ -116,6 +135,14 @@ public class LevelManager : MonoBehaviour
             Keyboard.current.f8Key.wasPressedThisFrame)
         {
             ClearCompletedLevelsForTesting();
+            return;
+        }
+
+        if (gameCompleted && !GameResetClick.IsModalOpen &&
+            Keyboard.current != null &&
+            Keyboard.current.yKey.wasPressedThisFrame)
+        {
+            ResetGameToBeginning();
         }
     }
 
@@ -161,6 +188,8 @@ public class LevelManager : MonoBehaviour
 
         currentLevel = config;
         currentLevelIndex = index;
+        gameCompleted = false;
+        HideCompletionMessage();
         OperationAvailabilityChanged?.Invoke();
         UpdateTargetLabel();
         Debug.Log(
@@ -286,6 +315,22 @@ public class LevelManager : MonoBehaviour
     /// </summary>
     public void ClearCompletedLevelsForTesting()
     {
+        ResetGameProgress();
+        Debug.Log("F8：已清除通关记录、奖励和运算解锁，回到初始关卡。", this);
+    }
+
+    /// <summary>
+    /// Clears the complete game progress and returns to the configured
+    /// starting level. This is used by the final-level Y-key restart.
+    /// </summary>
+    public void ResetGameToBeginning()
+    {
+        ResetGameProgress();
+        Debug.Log("Y：已重置游戏，回到初始关卡。", this);
+    }
+
+    private void ResetGameProgress()
+    {
         if (progress == null)
         {
             progress = new LevelProgressData();
@@ -300,6 +345,8 @@ public class LevelManager : MonoBehaviour
 
         StopAllCoroutines();
         isAdvancingLevel = false;
+        gameCompleted = false;
+        HideCompletionMessage();
         SaveProgress();
 
         GameResetClick resetClick = FindFirstObjectByType<GameResetClick>();
@@ -315,7 +362,6 @@ public class LevelManager : MonoBehaviour
         }
 
         SyncUnlockedMachineRewards();
-        Debug.Log("F8：已清除通关记录、奖励和运算解锁，回到初始关卡。", this);
     }
 
     private void HandleNumberPlaced(NumberToken token)
@@ -453,16 +499,68 @@ public class LevelManager : MonoBehaviour
         resetClick.ResetRoundImmediately();
         yield return null;
 
-        if (LoadNextLevel())
+        int nextLevelIndex = currentLevelIndex + 1;
+        if (nextLevelIndex < levels.Count && LoadNextLevel())
         {
             Debug.Log($"已重置本局并进入下一关：{currentLevel.DisplayName}。", this);
         }
         else
         {
-            Debug.Log("所有关卡已完成，当前关卡是最后一关。", this);
+            if (nextLevelIndex >= levels.Count)
+            {
+                ShowCompletionMessage();
+                Debug.Log("所有关卡已完成，当前关卡是最后一关。按 Y 键可以重置游戏。", this);
+            }
+            else
+            {
+                Debug.LogError("关卡完成后无法加载下一关，请检查 Levels 列表和关卡配置。", this);
+            }
         }
 
         isAdvancingLevel = false;
+    }
+
+    private bool HasCompletedAllLevels()
+    {
+        if (progress == null || levels == null || levels.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (LevelConfig level in levels)
+        {
+            if (level == null ||
+                !progress.completedLevelIds.Contains(level.LevelId))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void ShowCompletionMessage()
+    {
+        gameCompleted = true;
+
+        if (completionLabel == null)
+        {
+            Debug.LogWarning(
+                $"{name}：已完成最后一关，但没有设置 Completion Label。请绑定 TMP 文本以显示通关提示。",
+                this);
+            return;
+        }
+
+        completionLabel.text = completionMessage;
+        completionLabel.gameObject.SetActive(true);
+    }
+
+    private void HideCompletionMessage()
+    {
+        if (completionLabel != null)
+        {
+            completionLabel.gameObject.SetActive(false);
+        }
     }
 
     private void GrantReward(LevelRewardConfig reward, int rewardIndex)
@@ -557,13 +655,23 @@ public class LevelManager : MonoBehaviour
 
     private void UpdateTargetLabel()
     {
-        if (targetLabel == null)
+        string targetText = currentLevel == null
+            ? string.Empty
+            : currentLevel.TargetNumbersText;
+
+        if (targetLabel != null)
         {
-            return;
+            targetLabel.text = string.IsNullOrEmpty(targetText)
+                ? string.Empty
+                : $"目标：{targetText}";
         }
 
-        targetLabel.text = currentLevel == null
-            ? string.Empty
-            : $"目标：{currentLevel.TargetNumbersText}";
+        if (requiredNumbersLabel != null)
+        {
+            requiredNumbersLabel.text = string.IsNullOrEmpty(targetText)
+                ? string.Empty
+                : string.Format(requiredNumbersFormat, targetText);
+            requiredNumbersLabel.gameObject.SetActive(!string.IsNullOrEmpty(targetText));
+        }
     }
 }

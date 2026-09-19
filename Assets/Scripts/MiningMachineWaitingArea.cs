@@ -34,6 +34,8 @@ public class MiningMachineWaitingArea : MonoBehaviour
     [Header("待选区域")]
     [Tooltip("用于判断采矿机是否拖回待选区的 Collider2D。留空时自动使用本物体上的 Collider2D。")]
     [SerializeField] private Collider2D waitingAreaCollider;
+    [Tooltip("固定的采矿机生成点。建议配置 6 个 Transform；配置后待选区翻页会复用这些位置。")]
+    [SerializeField] private List<Transform> spawnPoints = new List<Transform>();
     [Tooltip("初始采矿机的生成基准点。留空时使用待选区物体自身的位置。")]
     [SerializeField] private Transform spawnPoint;
 
@@ -50,11 +52,21 @@ public class MiningMachineWaitingArea : MonoBehaviour
     [SerializeField] private bool fitInitialMachinesToWaitingArea = true;
     [SerializeField, Min(0f)] private float initialLayoutPadding = 0.05f;
 
+    [Header("待选区分页")]
+    [Tooltip("每页最多显示的采矿机数量。配置生成点后，会自动受生成点数量限制。")]
+    [SerializeField, Min(1)] private int machinesPerPage = 6;
+    [Tooltip("可选的页码 TextMeshPro 文本，例如‘第 1/3 页’。")]
+    [SerializeField] private TMP_Text pageLabel;
+    [SerializeField] private string pageLabelFormat = "第 {0}/{1} 页";
+
     private bool initialMachinesSpawned;
+    private bool pagingInitialized;
     private readonly HashSet<string> spawnedRewardMachineIds =
         new HashSet<string>();
 
     public MiningMachineItem SelectedMachine { get; private set; }
+    public int CurrentPage => currentPage;
+    public int PageCount => GetPageCount();
 
     private MiningMachineItem pressedMachine;
     private Transform originalParent;
@@ -70,6 +82,9 @@ public class MiningMachineWaitingArea : MonoBehaviour
     private bool isDragging;
     private bool wasDeployedAtPointerDown;
     private bool deploymentReleasedForDrag;
+    private int currentPage;
+
+    private const int DefaultSpawnPointCount = 6;
 
     /// <summary>
     /// Raised when the selected machine changes. Null means nothing is selected.
@@ -98,9 +113,27 @@ public class MiningMachineWaitingArea : MonoBehaviour
         RegisterChildMachines();
     }
 
+    private void Reset()
+    {
+        if (spawnPoints == null)
+        {
+            spawnPoints = new List<Transform>();
+        }
+
+        if (spawnPoints.Count == 0)
+        {
+            for (int i = 0; i < DefaultSpawnPointCount; i++)
+            {
+                spawnPoints.Add(null);
+            }
+        }
+    }
+
     private void Start()
     {
         SpawnInitialMachines();
+        pagingInitialized = true;
+        RefreshWaitingPage();
 
         if (deploymentArea == null)
         {
@@ -125,6 +158,14 @@ public class MiningMachineWaitingArea : MonoBehaviour
         {
             Debug.LogWarning($"{name}：没有找到 MiningMachineDeploymentArea。请在开采区域网格上添加该组件。", this);
         }
+
+        int configuredSpawnPointCount = GetValidSpawnPointCount();
+        if (configuredSpawnPointCount > 0 && configuredSpawnPointCount < DefaultSpawnPointCount)
+        {
+            Debug.LogWarning(
+                $"{name}：当前只配置了 {configuredSpawnPointCount} 个待选区生成点，建议配置满 {DefaultSpawnPointCount} 个。",
+                this);
+        }
     }
 
     /// <summary>
@@ -134,6 +175,10 @@ public class MiningMachineWaitingArea : MonoBehaviour
     public void EnsureInitialMachinesSpawned()
     {
         SpawnInitialMachines();
+        if (pagingInitialized)
+        {
+            RefreshWaitingPage();
+        }
 
         if (deploymentArea == null)
         {
@@ -173,10 +218,7 @@ public class MiningMachineWaitingArea : MonoBehaviour
 
         // Refit all waiting machines so a newly-unlocked machine receives a
         // valid slot inside the waiting area instead of overlapping another.
-        if (fitInitialMachinesToWaitingArea && machines.Count > 0)
-        {
-            ArrangeInitialMachines(new List<MiningMachineItem>(machines), columns);
-        }
+        RefreshWaitingPage();
 
         foreach (MiningMachineItem waitingMachine in machines)
         {
@@ -256,6 +298,201 @@ public class MiningMachineWaitingArea : MonoBehaviour
         }
 
         machine.SetWaitingArea(this);
+        if (pagingInitialized)
+        {
+            RefreshWaitingPage();
+        }
+    }
+
+    /// <summary>
+    /// Shows the previous page of waiting machines. It can be called by a
+    /// world-object raycast script or any other scene interaction.
+    /// </summary>
+    public void PreviousPage()
+    {
+        if (GameResetClick.IsModalOpen)
+        {
+            return;
+        }
+
+        SetPage(currentPage - 1);
+    }
+
+    /// <summary>
+    /// Shows the next page of waiting machines. It can be called by a
+    /// world-object raycast script or any other scene interaction.
+    /// </summary>
+    public void NextPage()
+    {
+        if (GameResetClick.IsModalOpen)
+        {
+            return;
+        }
+
+        SetPage(currentPage + 1);
+    }
+
+    /// <summary>
+    /// Sets a zero-based page index. This is useful for a page indicator or a
+    /// custom page-selection UI.
+    /// </summary>
+    public void SetPage(int pageIndex)
+    {
+        int pageCount = GetPageCount();
+        currentPage = Mathf.Clamp(pageIndex, 0, pageCount - 1);
+        RefreshWaitingPage();
+    }
+
+    private int GetPageCount()
+    {
+        int safeMachinesPerPage = GetPageCapacity();
+        int machineCount = 0;
+        foreach (MiningMachineItem machine in machines)
+        {
+            if (machine != null)
+            {
+                machineCount++;
+            }
+        }
+
+        return Mathf.Max(1, Mathf.CeilToInt(
+            machineCount / (float)safeMachinesPerPage));
+    }
+
+    private int GetPageCapacity()
+    {
+        int configuredCapacity = Mathf.Max(1, machinesPerPage);
+        int pointCount = GetValidSpawnPointCount();
+        return pointCount > 0
+            ? Mathf.Min(configuredCapacity, pointCount)
+            : configuredCapacity;
+    }
+
+    private int GetValidSpawnPointCount()
+    {
+        if (spawnPoints == null)
+        {
+            return 0;
+        }
+
+        int count = 0;
+        foreach (Transform point in spawnPoints)
+        {
+            if (point != null)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private Transform GetSpawnPointForSlot(int slotIndex)
+    {
+        int pointCount = GetValidSpawnPointCount();
+        if (pointCount == 0)
+        {
+            return null;
+        }
+
+        int targetIndex = ((slotIndex % pointCount) + pointCount) % pointCount;
+        int validIndex = 0;
+        foreach (Transform point in spawnPoints)
+        {
+            if (point == null)
+            {
+                continue;
+            }
+
+            if (validIndex == targetIndex)
+            {
+                return point;
+            }
+
+            validIndex++;
+        }
+
+        return null;
+    }
+
+    private void RefreshWaitingPage()
+    {
+        machines.RemoveAll(machine => machine == null);
+        int pageCount = GetPageCount();
+        currentPage = Mathf.Clamp(currentPage, 0, pageCount - 1);
+
+        if (!pagingInitialized)
+        {
+            UpdatePageLabel(pageCount);
+            return;
+        }
+
+        int safeMachinesPerPage = GetPageCapacity();
+        int firstIndex = currentPage * safeMachinesPerPage;
+        int visibleCount = Mathf.Min(
+            safeMachinesPerPage,
+            Mathf.Max(0, machines.Count - firstIndex));
+        HashSet<MiningMachineItem> visibleMachines =
+            new HashSet<MiningMachineItem>();
+        List<MiningMachineItem> pageMachines =
+            new List<MiningMachineItem>(visibleCount);
+
+        for (int i = 0; i < visibleCount; i++)
+        {
+            MiningMachineItem machine = machines[firstIndex + i];
+            if (machine != null)
+            {
+                visibleMachines.Add(machine);
+                pageMachines.Add(machine);
+            }
+        }
+
+        if (SelectedMachine != null && !visibleMachines.Contains(SelectedMachine))
+        {
+            SetSelectedMachine(null);
+        }
+
+        if (pageMachines.Count > 0 &&
+            (fitInitialMachinesToWaitingArea || spawnPoint != null ||
+             GetValidSpawnPointCount() > 0))
+        {
+            ArrangeInitialMachines(pageMachines, initialColumns);
+        }
+
+        foreach (MiningMachineItem machine in machines)
+        {
+            if (machine == null)
+            {
+                continue;
+            }
+
+            bool shouldShow = visibleMachines.Contains(machine);
+            if (machine.gameObject.activeSelf != shouldShow)
+            {
+                machine.gameObject.SetActive(shouldShow);
+            }
+
+            if (shouldShow)
+            {
+                machine.CaptureWaitingAreaPlacement();
+            }
+        }
+
+        UpdatePageLabel(pageCount);
+    }
+
+    private void UpdatePageLabel(int pageCount)
+    {
+        if (pageLabel == null)
+        {
+            return;
+        }
+
+        pageLabel.text = string.Format(
+            pageLabelFormat,
+            currentPage + 1,
+            pageCount);
+        pageLabel.gameObject.SetActive(pageCount > 1);
     }
 
     /// <summary>
@@ -295,9 +532,9 @@ public class MiningMachineWaitingArea : MonoBehaviour
             }
         }
 
-        if (fitInitialMachinesToWaitingArea && spawnedMachines.Count > 0)
+        if (spawnedMachines.Count > 0 && pagingInitialized)
         {
-            ArrangeInitialMachines(spawnedMachines, columns);
+            RefreshWaitingPage();
         }
 
         foreach (MiningMachineItem machine in spawnedMachines)
@@ -313,6 +550,16 @@ public class MiningMachineWaitingArea : MonoBehaviour
 
     private void ArrangeInitialMachines(List<MiningMachineItem> spawnedMachines, int columns)
     {
+        if (GetValidSpawnPointCount() > 0)
+        {
+            for (int i = 0; i < spawnedMachines.Count; i++)
+            {
+                SetInitialMachineTransform(spawnedMachines[i], i, columns);
+            }
+
+            return;
+        }
+
         if (spawnPoint != null)
         {
             for (int i = 0; i < spawnedMachines.Count; i++)
@@ -394,6 +641,16 @@ public class MiningMachineWaitingArea : MonoBehaviour
             return;
         }
 
+        Transform fixedSpawnPoint = GetSpawnPointForSlot(slotIndex);
+        if (fixedSpawnPoint != null)
+        {
+            Vector3 fixedWorldPosition = fixedSpawnPoint.position;
+            fixedWorldPosition.z = machine.transform.position.z;
+            machine.transform.position = fixedWorldPosition;
+            machine.transform.rotation = fixedSpawnPoint.rotation;
+            return;
+        }
+
         int safeColumns = Mathf.Max(1, columns);
         int column = slotIndex % safeColumns;
         int row = slotIndex / safeColumns;
@@ -464,6 +721,10 @@ public class MiningMachineWaitingArea : MonoBehaviour
         machines.Remove(machine);
         machine.SetWaitingArea(null);
         machine.SetSelected(false);
+        if (pagingInitialized)
+        {
+            RefreshWaitingPage();
+        }
     }
 
     /// <summary>
@@ -960,5 +1221,26 @@ public class MiningMachineWaitingArea : MonoBehaviour
         }
 
         SelectionChanged?.Invoke(SelectedMachine);
+    }
+
+    private void OnValidate()
+    {
+        if (spawnPoints == null)
+        {
+            spawnPoints = new List<Transform>();
+        }
+
+        if (!Application.isPlaying && spawnPoints.Count == 0)
+        {
+            for (int i = 0; i < DefaultSpawnPointCount; i++)
+            {
+                spawnPoints.Add(null);
+            }
+        }
+
+        machinesPerPage = Mathf.Max(1, machinesPerPage);
+        initialColumns = Mathf.Max(1, initialColumns);
+        initialSpacing.x = Mathf.Max(0.001f, initialSpacing.x);
+        initialSpacing.y = Mathf.Max(0.001f, initialSpacing.y);
     }
 }
