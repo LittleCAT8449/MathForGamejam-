@@ -17,10 +17,10 @@ MonoBehaviour:
   targetNumber: 8
   targetNumbers:
   - 20
-  - 5
+  - 3
   allowedOperations: 00000000
   rewards:
-  - rewardId: 1
+  - rewardId: 3
     rewardType: 0
     operation: 1
     machinePrefab: {fileID: 0}
