@@ -845,9 +845,9 @@ MonoBehaviour:
   blockedDeploymentMessage: "\u533A\u57DF\u5DF2\u5360\u7528\uFF0C\u65E0\u6CD5\u90E8\u7F72/\u65CB\u8F6C"
   spawnInitialMachines: 1
   initialMachines:
-  - prefab: {fileID: 1357134379307912358, guid: 112699ab30eda4d4db9e79d60439f0fa, type: 3}
+  - prefab: {fileID: 1357134379307912358, guid: 232c310f4299ff84aa1023fd7a32a447, type: 3}
     count: 0
-  - prefab: {fileID: 1357134379307912358, guid: 286868125428a51468aff5cb9464acea, type: 3}
+  - prefab: {fileID: 1357134379307912358, guid: db180ec4aed6fc440a7fd0476c608ed7, type: 3}
     count: 0
   spawnParent: {fileID: 513101900}
   initialStartLocalPosition: {x: 0, y: 0}
@@ -2003,8 +2003,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   levels:
-  - {fileID: 11400000, guid: ce4e5a88efe8e414e8accb7fb530e625, type: 2}
-  - {fileID: 11400000, guid: 82b64929eb3a2c749b8b88d7ff5b8879, type: 2}
+  - {fileID: 11400000, guid: d837b3443fe7dc948864b09053598a27, type: 2}
+  - {fileID: 11400000, guid: 6bb7109296cbcf541a6a165c03fc7187, type: 2}
   startingLevelIndex: 0
   settlementArea: {fileID: 547383554}
   waitingArea: {fileID: 0}
@@ -4570,7 +4570,7 @@ MonoBehaviour:
   inputCamera: {fileID: 519420031}
   clickableLayers:
     serializedVersion: 2
-    m_Bits: 4294967291
+    m_Bits: 115
 --- !u!1 &1785363981
 GameObject:
   m_ObjectHideFlags: 0

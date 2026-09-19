@@ -99,7 +99,7 @@ MonoBehaviour:
   waitingArea: {fileID: 0}
   footprintSize: {x: 1, y: 1}
   autoFootprintFromShape: 1
-  productionNumber: 4
+  productionNumber: 3
 --- !u!1 &7237207179979603820
 GameObject:
   m_ObjectHideFlags: 0
