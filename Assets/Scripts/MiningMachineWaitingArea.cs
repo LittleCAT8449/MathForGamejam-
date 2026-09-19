@@ -31,6 +31,12 @@ public class MiningMachineWaitingArea : MonoBehaviour
     [SerializeField] private TMP_Text deploymentPrompt;
     [SerializeField] private string blockedDeploymentMessage = "区域已占用，无法部署/旋转";
 
+    [Header("待选区域")]
+    [Tooltip("用于判断采矿机是否拖回待选区的 Collider2D。留空时自动使用本物体上的 Collider2D。")]
+    [SerializeField] private Collider2D waitingAreaCollider;
+    [Tooltip("初始采矿机的生成基准点。留空时使用待选区物体自身的位置。")]
+    [SerializeField] private Transform spawnPoint;
+
     [Header("开局生成")]
     [SerializeField] private bool spawnInitialMachines = true;
     [SerializeField] private List<InitialMachineEntry> initialMachines =
@@ -75,6 +81,11 @@ public class MiningMachineWaitingArea : MonoBehaviour
         if (inputCamera == null)
         {
             inputCamera = Camera.main;
+        }
+
+        if (waitingAreaCollider == null)
+        {
+            waitingAreaCollider = GetComponent<Collider2D>();
         }
 
         if (deploymentPrompt == null)
@@ -155,12 +166,7 @@ public class MiningMachineWaitingArea : MonoBehaviour
         machine.name = $"{prefab.name}_Reward";
         int slotIndex = machines.Count;
         int columns = Mathf.Max(1, initialColumns);
-        int column = slotIndex % columns;
-        int row = slotIndex / columns;
-        machine.transform.localPosition = new Vector3(
-            initialStartLocalPosition.x + column * initialSpacing.x,
-            initialStartLocalPosition.y + row * initialSpacing.y,
-            machine.transform.localPosition.z);
+        SetInitialMachineTransform(machine, slotIndex, columns);
 
         RegisterMachine(machine);
         spawnedRewardMachineIds.Add(rewardId);
@@ -281,12 +287,7 @@ public class MiningMachineWaitingArea : MonoBehaviour
             for (int i = 0; i < entry.Count; i++)
             {
                 MiningMachineItem machine = Instantiate(entry.Prefab, parent, false);
-                int column = spawnIndex % columns;
-                int row = spawnIndex / columns;
-                machine.transform.localPosition = new Vector3(
-                    initialStartLocalPosition.x + column * initialSpacing.x,
-                    initialStartLocalPosition.y + row * initialSpacing.y,
-                    machine.transform.localPosition.z);
+                SetInitialMachineTransform(machine, spawnIndex, columns);
                 machine.name = $"{entry.Prefab.name}_{spawnIndex + 1}";
                 RegisterMachine(machine);
                 spawnedMachines.Add(machine);
@@ -312,14 +313,33 @@ public class MiningMachineWaitingArea : MonoBehaviour
 
     private void ArrangeInitialMachines(List<MiningMachineItem> spawnedMachines, int columns)
     {
-        SpriteRenderer areaRenderer = GetComponent<SpriteRenderer>();
-        if (areaRenderer == null || areaRenderer.sprite == null)
+        if (spawnPoint != null)
         {
-            Debug.LogWarning($"{name}：自动排列初始采矿机需要待选区上的 SpriteRenderer。", this);
+            for (int i = 0; i < spawnedMachines.Count; i++)
+            {
+                SetInitialMachineTransform(spawnedMachines[i], i, columns);
+            }
+
             return;
         }
 
-        Bounds areaBounds = areaRenderer.bounds;
+        Bounds areaBounds;
+        if (waitingAreaCollider != null)
+        {
+            areaBounds = waitingAreaCollider.bounds;
+        }
+        else
+        {
+            SpriteRenderer areaRenderer = GetComponent<SpriteRenderer>();
+            if (areaRenderer == null || areaRenderer.sprite == null)
+            {
+                Debug.LogWarning($"{name}：自动排列初始采矿机需要待选区 Collider2D 或 SpriteRenderer。", this);
+                return;
+            }
+
+            areaBounds = areaRenderer.bounds;
+        }
+
         float padding = Mathf.Max(0f, initialLayoutPadding);
         int count = spawnedMachines.Count;
         columns = Mathf.Clamp(columns, 1, count);
@@ -362,6 +382,40 @@ public class MiningMachineWaitingArea : MonoBehaviour
             targetRootPosition.z = spawnedMachines[i].transform.position.z;
             spawnedMachines[i].transform.position = targetRootPosition;
         }
+    }
+
+    private void SetInitialMachineTransform(
+        MiningMachineItem machine,
+        int slotIndex,
+        int columns)
+    {
+        if (machine == null)
+        {
+            return;
+        }
+
+        int safeColumns = Mathf.Max(1, columns);
+        int column = slotIndex % safeColumns;
+        int row = slotIndex / safeColumns;
+        Vector3 localPosition = new Vector3(
+            initialStartLocalPosition.x + column * initialSpacing.x,
+            initialStartLocalPosition.y + row * initialSpacing.y,
+            0f);
+
+        // Preserve the existing spawnParent-local behavior when no explicit
+        // spawn point is configured. This avoids changing the scale handling
+        // of existing scenes that use a non-uniform spawnParent.
+        if (spawnPoint == null)
+        {
+            machine.transform.localPosition = localPosition;
+            return;
+        }
+
+        Transform origin = spawnPoint;
+        Vector3 worldPosition = origin.TransformPoint(localPosition);
+        worldPosition.z = machine.transform.position.z;
+        machine.transform.position = worldPosition;
+        machine.transform.rotation = origin.rotation;
     }
 
     private bool TryGetMachineVisualBounds(MiningMachineItem machine, out Bounds bounds)
@@ -818,6 +872,11 @@ public class MiningMachineWaitingArea : MonoBehaviour
 
     private bool IsWorldPointInsideWaitingArea(Vector3 worldPosition)
     {
+        if (waitingAreaCollider != null)
+        {
+            return waitingAreaCollider.OverlapPoint(worldPosition);
+        }
+
         SpriteRenderer areaRenderer = GetComponent<SpriteRenderer>();
         if (areaRenderer != null && areaRenderer.sprite != null)
         {
@@ -826,8 +885,7 @@ public class MiningMachineWaitingArea : MonoBehaviour
                    worldPosition.y >= bounds.min.y && worldPosition.y <= bounds.max.y;
         }
 
-        Collider2D areaCollider = GetComponent<Collider2D>();
-        return areaCollider != null && areaCollider.OverlapPoint(worldPosition);
+        return false;
     }
 
     private void ShowDeploymentPrompt(string reason)

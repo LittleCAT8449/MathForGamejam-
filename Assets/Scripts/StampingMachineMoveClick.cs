@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -10,6 +11,13 @@ public class StampingMachineMoveClick : MonoBehaviour
     [SerializeField] private StampingMachine stampingMachine;
     [SerializeField] private Camera inputCamera;
     [SerializeField] private LayerMask clickableLayers = Physics2D.DefaultRaycastLayers;
+    [Header("拉杆 Z 轴旋转")]
+    [Tooltip("点击冲压时拉杆绕自身 Z 轴旋转的角度，单位为度。")]
+    [SerializeField] private float rotationAngle = 90f;
+
+    private Quaternion initialLocalRotation;
+    private bool leverRotationPrepared;
+    private Coroutine restoreRotationCoroutine;
 
     private void Awake()
     {
@@ -26,6 +34,8 @@ public class StampingMachineMoveClick : MonoBehaviour
         {
             stampingMachine = FindFirstObjectByType<StampingMachine>();
         }
+
+        initialLocalRotation = transform.localRotation;
     }
 
     private void Start()
@@ -71,12 +81,89 @@ public class StampingMachineMoveClick : MonoBehaviour
             return;
         }
 
-        if (stampingMachine.CanStartMove)
+        bool canStartMove = stampingMachine.CanStartMove;
+        if (canStartMove)
         {
             GameAudioManager.Instance?.PlayLeverPull();
+            RotateLever();
         }
 
         stampingMachine.Move();
+
+        if (canStartMove)
+        {
+            StartRestoreRotationWhenPressReturns();
+        }
+    }
+
+    /// <summary>
+    /// Rotates the lever using the configured Z-axis angle. This can be
+    /// connected to a separate button or called from another script.
+    /// </summary>
+    public void CallRotate()
+    {
+        if (GameResetClick.IsModalOpen || stampingMachine == null)
+        {
+            return;
+        }
+
+        RotateLever();
+    }
+
+    private bool RotateLever()
+    {
+        if (stampingMachine == null || !stampingMachine.CanStartMove)
+        {
+            return false;
+        }
+
+        if (leverRotationPrepared)
+        {
+            return true;
+        }
+
+        transform.localRotation = initialLocalRotation *
+                                  Quaternion.Euler(0f, 0f, rotationAngle);
+        leverRotationPrepared = true;
+        return true;
+    }
+
+    private void StartRestoreRotationWhenPressReturns()
+    {
+        if (restoreRotationCoroutine != null)
+        {
+            StopCoroutine(restoreRotationCoroutine);
+        }
+
+        restoreRotationCoroutine = StartCoroutine(RestoreRotationWhenPressReturns());
+    }
+
+    private IEnumerator RestoreRotationWhenPressReturns()
+    {
+        while (stampingMachine != null && !stampingMachine.CanStartMove)
+        {
+            yield return null;
+        }
+
+        RestoreLeverRotation();
+        restoreRotationCoroutine = null;
+    }
+
+    private void RestoreLeverRotation()
+    {
+        transform.localRotation = initialLocalRotation;
+        leverRotationPrepared = false;
+    }
+
+    private void OnDisable()
+    {
+        if (restoreRotationCoroutine != null)
+        {
+            StopCoroutine(restoreRotationCoroutine);
+            restoreRotationCoroutine = null;
+        }
+
+        RestoreLeverRotation();
     }
 
     private bool WasClicked(Vector2 screenPosition)

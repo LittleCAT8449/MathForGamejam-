@@ -9,7 +9,16 @@ using UnityEngine.InputSystem;
 public class NumberArea : MonoBehaviour
 {
     [SerializeField] private NumberToken numberPrefab;
+    [Header("数字生成位置")]
+    [Tooltip("数字区内第一个数字的生成基准点。留空时使用数字区物体自身的位置。")]
+    [SerializeField] private Transform numberSpawnPoint;
+    [Header("数字排列区域")]
+    [Tooltip("可选。指定一个 Collider2D 作为数字排列范围，脚本会按范围宽度自动换行。")]
+    [SerializeField] private Collider2D gridArea;
+    [Tooltip("未设置排列区域时使用的每行数字数量。设置排列区域后会按区域宽度自动计算。")]
     [SerializeField, Min(1)] private int columns = 5;
+    [Header("Grid 间距")]
+    [Tooltip("X 为同一行数字的横向步进距离，Y 为换行后的纵向步进距离。")]
     [SerializeField] private Vector2 spacing = new Vector2(1f, 1f);
     [SerializeField] private Vector2 firstTokenLocalPosition = Vector2.zero;
     [SerializeField] private CameraSmoothMove cameraMover;
@@ -88,20 +97,12 @@ public class NumberArea : MonoBehaviour
         }
 
         int index = spawnedTokens.Count;
-        int safeColumns = Mathf.Max(1, columns);
-        int column = index % safeColumns;
-        int row = index / safeColumns;
-
-        Vector3 localPosition = new Vector3(
-            firstTokenLocalPosition.x + column * spacing.x,
-            firstTokenLocalPosition.y - row * spacing.y,
-            0f);
-        Vector3 worldPosition = transform.TransformPoint(localPosition);
+        Vector3 worldPosition = GetTokenWorldPosition(index);
 
         // Instantiate unparented first, then preserve its world transform when
         // parenting. This keeps the prefab's configured world size even when
         // the number-area object has a non-unit scale.
-        NumberToken token = Instantiate(numberPrefab, worldPosition, transform.rotation);
+        NumberToken token = Instantiate(numberPrefab, worldPosition, GetSpawnOrigin().rotation);
         token.transform.SetParent(transform, true);
         token.SetValue(value);
 
@@ -245,12 +246,7 @@ public class NumberArea : MonoBehaviour
         }
 
         int index = spawnedTokens.IndexOf(token);
-        int safeColumns = Mathf.Max(1, columns);
-        Vector3 localPosition = new Vector3(
-            firstTokenLocalPosition.x + (index % safeColumns) * spacing.x,
-            firstTokenLocalPosition.y - (index / safeColumns) * spacing.y,
-            0f);
-        Vector3 worldPosition = transform.TransformPoint(localPosition);
+        Vector3 worldPosition = GetTokenWorldPosition(index);
 
         if (drag == null)
         {
@@ -261,6 +257,54 @@ public class NumberArea : MonoBehaviour
         drag.MoveToNumberArea(transform, worldPosition);
         token.SetSelected(false);
         Debug.Log($"交付区数字 {token.Value} 已返回数字区。", token);
+    }
+
+    private Transform GetSpawnOrigin()
+    {
+        return numberSpawnPoint != null ? numberSpawnPoint : transform;
+    }
+
+    private Vector3 GetTokenWorldPosition(int index)
+    {
+        int safeColumns = GetLayoutColumns();
+        int column = index % safeColumns;
+        int row = index / safeColumns;
+
+        Vector3 localPosition = new Vector3(
+            firstTokenLocalPosition.x + column * spacing.x,
+            firstTokenLocalPosition.y - row * spacing.y,
+            0f);
+        return GetSpawnOrigin().TransformPoint(localPosition);
+    }
+
+    private int GetLayoutColumns()
+    {
+        int fallbackColumns = Mathf.Max(1, columns);
+        if (gridArea == null)
+        {
+            return fallbackColumns;
+        }
+
+        Transform origin = GetSpawnOrigin();
+        Bounds bounds = gridArea.bounds;
+        Vector3[] corners =
+        {
+            new Vector3(bounds.min.x, bounds.min.y, bounds.center.z),
+            new Vector3(bounds.min.x, bounds.max.y, bounds.center.z),
+            new Vector3(bounds.max.x, bounds.min.y, bounds.center.z),
+            new Vector3(bounds.max.x, bounds.max.y, bounds.center.z)
+        };
+
+        float maxLocalX = float.NegativeInfinity;
+        foreach (Vector3 corner in corners)
+        {
+            maxLocalX = Mathf.Max(maxLocalX, origin.InverseTransformPoint(corner).x);
+        }
+
+        float availableWidth = maxLocalX - firstTokenLocalPosition.x;
+        float step = Mathf.Max(0.001f, spacing.x);
+        int fittedColumns = Mathf.FloorToInt(availableWidth / step) + 1;
+        return Mathf.Max(1, fittedColumns);
     }
 
     private bool TryGetPointerWorldPosition(
