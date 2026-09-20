@@ -76,6 +76,9 @@ public class StartMiningObject : MonoBehaviour
             return;
         }
 
+        TutorialTooltipController.FindOrCreate()
+            .HidePowerAndMiningAreaTooltips();
+
         if (deploymentArea == null)
         {
             Debug.LogWarning("无法开始采矿：没有指定开采区域。", this);
@@ -120,6 +123,7 @@ public class StartMiningObject : MonoBehaviour
             }
         }
 
+        TutorialTooltipController.FindOrCreate().ShowOperationTooltip();
         Debug.Log($"开始采矿：{workingMachineCount} 台机器工作，总产出 {totalOutput}。", this);
     }
 

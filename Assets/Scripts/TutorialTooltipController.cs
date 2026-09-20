@@ -1,3 +1,4 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 
@@ -29,8 +30,11 @@ public sealed class TutorialTooltipController : MonoBehaviour
     private bool enteredStampingArea;
     private bool numberClicked;
     private bool firstCombinationCompleted;
-    private bool operationRewardUnlocked;
     private bool modeRewardUnlocked;
+    private bool initialMiningMachineHintShown;
+    private bool stampingAreaHintShown;
+    private bool operationHintShown;
+    private Coroutine subtractModeLabelHideCoroutine;
 
     /// <summary>
     /// Creates a controller automatically when the scene does not have one.
@@ -126,6 +130,22 @@ public sealed class TutorialTooltipController : MonoBehaviour
     }
 
     /// <summary>
+    /// Hides the setup hints once the player presses the start-mining object.
+    /// When no dedicated TMP fields are assigned, the fallback tooltip is the
+    /// setup hint and is hidden as well.
+    /// </summary>
+    public void HidePowerAndMiningAreaTooltips()
+    {
+        ClearTooltip(powerTooltip);
+        ClearTooltip(miningAreaTooltip);
+
+        if (powerTooltip == null && miningAreaTooltip == null)
+        {
+            ClearTooltip(fallbackTooltip);
+        }
+    }
+
+    /// <summary>
     /// Called when a number is dragged into, or is being dragged over, the
     /// stamping area.
     /// </summary>
@@ -134,15 +154,29 @@ public sealed class TutorialTooltipController : MonoBehaviour
         if (!enteredStampingArea)
         {
             enteredStampingArea = true;
-            ClearAllTooltips();
-            Show(stampingAreaTooltip, "把数字放在凹槽内。");
+            if (!stampingAreaHintShown)
+            {
+                ClearAllTooltips();
+                ShowStampingHintOnce();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Shows the stamping-area hint when the camera first arrives at the
+    /// number area after mining starts. This does not mark the stamping area
+    /// as entered yet; the actual drag into the stamping collider still does
+    /// that through OnEnteredStampingArea().
+    /// </summary>
+    public void ShowStampingAreaTooltip()
+    {
+        if (stampingAreaHintShown)
+        {
+            return;
         }
 
-        if (operationRewardUnlocked)
-        {
-            ClearAllTooltips();
-            Show(operationTooltip, "点击锤头可以切换符号。");
-        }
+        ClearAllTooltips();
+        ShowStampingHintOnce();
     }
 
     /// <summary>
@@ -176,22 +210,105 @@ public sealed class TutorialTooltipController : MonoBehaviour
     }
 
     /// <summary>
+    /// Hides the delivery hint after a result has actually been placed in the
+    /// settlement area. A failed drop leaves the hint untouched.
+    /// </summary>
+    public void HideSettlementTooltip()
+    {
+        ClearTooltip(settlementTooltip);
+        if (settlementTooltip == null)
+        {
+            ClearTooltip(fallbackTooltip);
+        }
+    }
+
+    /// <summary>
     /// Called after the first operation (symbol) reward is permanently
     /// unlocked. The message is shown immediately only when the player is in
     /// the stamping area; otherwise it appears upon entering that area.
     /// </summary>
     public void OnOperationRewardUnlocked(StampOperation operation)
     {
-        if (operationRewardUnlocked)
+        // Kept as a callback for LevelManager. OperationTooltip is now shown
+        // after BeginMining rather than when the reward is granted.
+    }
+
+    /// <summary>
+    /// Shows the operation-selection hint after mining has started. The hint
+    /// is shown only once for the current tutorial run.
+    /// </summary>
+    public void ShowOperationTooltip()
+    {
+        if (operationHintShown || !HasUnlockedAlternativeOperation())
         {
             return;
         }
 
-        operationRewardUnlocked = true;
-        if (enteredStampingArea)
+        ClearAllTooltips();
+        Show(operationTooltip, "点击锤头可以切换符号。");
+        operationHintShown = true;
+    }
+
+    private bool HasUnlockedAlternativeOperation()
+    {
+        LevelManager levelManager = FindFirstObjectByType<LevelManager>();
+        if (levelManager == null)
         {
-            ClearAllTooltips();
-            Show(operationTooltip, "点击锤头可以切换符号。");
+            return false;
+        }
+
+        return levelManager.IsOperationAvailable(StampOperation.Subtract) ||
+               levelManager.IsOperationAvailable(StampOperation.Multiply) ||
+               levelManager.IsOperationAvailable(StampOperation.Divide);
+    }
+
+    /// <summary>
+    /// Hides the operation-selection hint when its selection panel is opened
+    /// or closed.
+    /// </summary>
+    public void HideOperationTooltip()
+    {
+        ClearTooltip(operationTooltip);
+        if (operationTooltip == null)
+        {
+            ClearTooltip(fallbackTooltip);
+        }
+    }
+
+    /// <summary>
+    /// Runs the subtraction-mode label timer from this persistent controller.
+    /// The operation-selection panel can be disabled immediately after a
+    /// button click, so its own coroutine would otherwise be stopped.
+    /// </summary>
+    public void ScheduleSubtractModeLabelHide(
+        StampOperationSelector selector,
+        float duration)
+    {
+        if (subtractModeLabelHideCoroutine != null)
+        {
+            StopCoroutine(subtractModeLabelHideCoroutine);
+            subtractModeLabelHideCoroutine = null;
+        }
+
+        if (selector == null || duration <= 0f)
+        {
+            selector?.HideSubtractModeLabelImmediately();
+            return;
+        }
+
+        subtractModeLabelHideCoroutine = StartCoroutine(
+            HideSubtractModeLabelAfterDelay(selector, duration));
+    }
+
+    private IEnumerator HideSubtractModeLabelAfterDelay(
+        StampOperationSelector selector,
+        float duration)
+    {
+        yield return new WaitForSeconds(duration);
+        subtractModeLabelHideCoroutine = null;
+        if (selector != null)
+        {
+            selector.HideSubtractModeLabelImmediately();
         }
     }
 
@@ -217,8 +334,10 @@ public sealed class TutorialTooltipController : MonoBehaviour
         enteredStampingArea = false;
         numberClicked = false;
         firstCombinationCompleted = false;
-        operationRewardUnlocked = false;
         modeRewardUnlocked = false;
+        initialMiningMachineHintShown = false;
+        stampingAreaHintShown = false;
+        operationHintShown = false;
 
         ClearAllTooltips();
         if (showInitialHint)
@@ -229,8 +348,25 @@ public sealed class TutorialTooltipController : MonoBehaviour
 
     private void ShowMiningMachineHint()
     {
+        if (initialMiningMachineHintShown)
+        {
+            return;
+        }
+
         ClearAllTooltips();
         Show(miningMachineTooltip, "这是数字采矿机。");
+        initialMiningMachineHintShown = true;
+    }
+
+    private void ShowStampingHintOnce()
+    {
+        if (stampingAreaHintShown)
+        {
+            return;
+        }
+
+        Show(stampingAreaTooltip, "把数字放在凹槽内。");
+        stampingAreaHintShown = true;
     }
 
     private void ClearAllTooltips()

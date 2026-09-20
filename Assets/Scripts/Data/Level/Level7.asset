@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: db8b6761aa944fd2bf7243aa57dfa161, type: 3}
   m_Name: Level7
   m_EditorClassIdentifier: 
-  levelId: level_04
-  displayName: "\u7B2C 4 \u5173"
+  levelId: level_07
+  displayName: "\u7B2C 7 \u5173"
   targetNumber: 8
   targetNumbers:
   - 85

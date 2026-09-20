@@ -122,6 +122,8 @@ public class NumberArea : MonoBehaviour
             cameraMover.MoveTo(cameraMoveTargetWorldPosition);
         }
 
+        TutorialTooltipController.FindOrCreate().ShowStampingAreaTooltip();
+
         Debug.Log($"数字区生成数字：{value}。", token);
         return token;
     }

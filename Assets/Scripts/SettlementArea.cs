@@ -92,6 +92,7 @@ public class SettlementArea : MonoBehaviour
         token.transform.position = transform.TransformPoint(localPosition);
         placedNumbers.Add(token);
         NumberPlaced?.Invoke(token);
+        TutorialTooltipController.FindOrCreate().HideSettlementTooltip();
         Debug.Log($"结果数字 {token.Value} 已放入结算区。", token);
     }
 

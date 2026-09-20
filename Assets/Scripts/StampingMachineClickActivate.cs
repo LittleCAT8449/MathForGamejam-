@@ -90,6 +90,7 @@ public class StampingMachineClickActivate : MonoBehaviour
         }
 
         targetObject.SetActive(true);
+        TutorialTooltipController.FindOrCreate().HideOperationTooltip();
         Debug.Log($"点击冲压机，已激活对象：{targetObject.name}。", targetObject);
     }
 

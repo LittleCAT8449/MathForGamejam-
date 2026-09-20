@@ -22,15 +22,3 @@ MonoBehaviour:
     rewardType: 2
     operation: 0
     machinePrefab: {fileID: 1357134379307912358, guid: b07dea62f40603d46a010bd9757a1126, type: 3}
-  - rewardId: 7
-    rewardType: 0
-    operation: 1
-    machinePrefab: {fileID: 0}
-  - rewardId: 12
-    rewardType: 1
-    operation: 1
-    machinePrefab: {fileID: 0}
-  - rewardId: 111
-    rewardType: 3
-    operation: 1
-    machinePrefab: {fileID: 0}

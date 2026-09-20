@@ -373,6 +373,7 @@ public class LevelManager : MonoBehaviour
         }
 
         SyncUnlockedMachineRewards();
+        TutorialTooltipController.FindOrCreate().ResetTutorialState();
     }
 
     private void HandleNumberPlaced(NumberToken token)

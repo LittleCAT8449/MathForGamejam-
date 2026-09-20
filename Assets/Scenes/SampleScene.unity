@@ -2345,7 +2345,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   stampingMachine: {fileID: 476563435}
-  uiObjectToClose: {fileID: 542648963}
+  uiObjectToClose: {fileID: 2029455822}
   levelManager: {fileID: 0}
   addButton: {fileID: 0}
   subtractButton: {fileID: 0}
@@ -2964,8 +2964,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 158130ee8355a914084541878f48877b, type: 2}
-  m_sharedMaterial: {fileID: -3116576996750330076, guid: 158130ee8355a914084541878f48877b, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 9d5d123f0bd0bef459a8dc2d7dbc57b8, type: 2}
+  m_sharedMaterial: {fileID: -6121715873009708050, guid: 9d5d123f0bd0bef459a8dc2d7dbc57b8, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -5741,7 +5741,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 5.8, y: -1.1}
+  m_AnchoredPosition: {x: 4.72, y: -0.04}
   m_SizeDelta: {x: 20, y: 5}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1750242127
@@ -6573,7 +6573,7 @@ MonoBehaviour:
   easingB: 5
   easingDuration: 0.3
   mirrorEasingOnReturn: 1
-  holdCoefficient: 0.2
+  holdDuration: 0.2
 --- !u!61 &1810646483
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -6861,7 +6861,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -5.641, y: -30}
+  m_AnchoredPosition: {x: -5.641, y: -250}
   m_SizeDelta: {x: 359.641, y: 85.7092}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1867376013

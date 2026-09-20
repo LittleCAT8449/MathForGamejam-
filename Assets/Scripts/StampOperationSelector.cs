@@ -58,11 +58,14 @@ public class StampOperationSelector : MonoBehaviour
         "负数模式（小数 - 大数）";
     [SerializeField] private string negativeModeLockedText =
         "\n负数模式未解锁";
+    [Tooltip("切换减法模式后，模式文字显示的秒数。")]
+    [SerializeField, Min(0f)] private float subtractModeDisplayDuration = 5f;
 
     private StampOperation lastLabelOperation;
     private bool lastLabelNegativeMode;
     private bool lastLabelNegativeUnlocked;
     private bool hasRefreshedLabel;
+    private bool showSubtractModeLabel;
 
     private void Awake()
     {
@@ -83,6 +86,7 @@ public class StampOperationSelector : MonoBehaviour
 
         CacheButtonSprites();
         RefreshButtons();
+        showSubtractModeLabel = false;
         RefreshSubtractModeLabel();
     }
 
@@ -183,7 +187,7 @@ public class StampOperationSelector : MonoBehaviour
             stampingMachine.ToggleSubtractMode();
         }
 
-        RefreshSubtractModeLabel();
+        ShowSubtractModeLabelForDuration();
         CloseUI();
         Debug.Log(
             $"已选择冲压运算：减法，{GetSubtractModeName()}。",
@@ -230,6 +234,11 @@ public class StampOperationSelector : MonoBehaviour
 
         stampingMachine.SetOperation(selectedOperation);
 
+        if (selectedOperation != StampOperation.Subtract)
+        {
+            HideSubtractModeLabelImmediately();
+        }
+
         CloseUI();
 
         Debug.Log($"已选择冲压运算：{GetOperationName(selectedOperation)}。", this);
@@ -241,6 +250,7 @@ public class StampOperationSelector : MonoBehaviour
     /// </summary>
     public void CloseUI()
     {
+        TutorialTooltipController.FindOrCreate().HideOperationTooltip();
         if (uiObjectToClose != null)
         {
             uiObjectToClose.SetActive(false);
@@ -342,6 +352,13 @@ public class StampOperationSelector : MonoBehaviour
             return;
         }
 
+        if (!showSubtractModeLabel)
+        {
+            subtractModeLabel.text = string.Empty;
+            CacheDisplayedLabelState();
+            return;
+        }
+
         if (hideLabelWhenNotSubtract &&
             stampingMachine.Operation != StampOperation.Subtract)
         {
@@ -364,6 +381,27 @@ public class StampOperationSelector : MonoBehaviour
 
         subtractModeLabel.text = $"减法：{modeText}";
         CacheDisplayedLabelState();
+    }
+
+    private void ShowSubtractModeLabelForDuration()
+    {
+        showSubtractModeLabel = true;
+        RefreshSubtractModeLabel();
+
+        if (subtractModeDisplayDuration <= 0f)
+        {
+            HideSubtractModeLabelImmediately();
+            return;
+        }
+
+        TutorialTooltipController.FindOrCreate()
+            .ScheduleSubtractModeLabelHide(this, subtractModeDisplayDuration);
+    }
+
+    public void HideSubtractModeLabelImmediately()
+    {
+        showSubtractModeLabel = false;
+        RefreshSubtractModeLabel();
     }
 
     private void CacheDisplayedLabelState()
