@@ -632,6 +632,8 @@ public class LevelManager : MonoBehaviour
                     progress.unlockedOperations.Add(reward.Operation);
                     changed = true;
                     Debug.Log($"永久解锁运算：{reward.Operation}。", this);
+                    TutorialTooltipController.FindOrCreate()
+                        .OnOperationRewardUnlocked(reward.Operation);
                 }
                 break;
             case LevelRewardType.UnlockNegativeSubtraction:
@@ -640,6 +642,8 @@ public class LevelManager : MonoBehaviour
                     progress.negativeSubtractUnlocked = true;
                     changed = true;
                     Debug.Log("永久解锁减法负数模式。", this);
+                    TutorialTooltipController.FindOrCreate()
+                        .OnModeRewardUnlocked();
                 }
                 break;
             case LevelRewardType.UnlockPositiveSubtraction:
@@ -648,6 +652,8 @@ public class LevelManager : MonoBehaviour
                     progress.unlockedOperations.Add(StampOperation.Subtract);
                     changed = true;
                     Debug.Log("永久解锁减法正数模式。", this);
+                    TutorialTooltipController.FindOrCreate()
+                        .OnModeRewardUnlocked();
                 }
                 break;
             case LevelRewardType.UnlockMiningMachine:

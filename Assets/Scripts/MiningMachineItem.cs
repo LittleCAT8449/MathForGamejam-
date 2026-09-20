@@ -257,6 +257,12 @@ public class MiningMachineItem : MonoBehaviour
         IsSelected = selected;
 
         RefreshVisuals();
+
+        if (selected)
+        {
+            TutorialTooltipController.FindOrCreate()
+                .OnMiningMachineSelected(this);
+        }
     }
 
     public void SetPowered(bool powered)

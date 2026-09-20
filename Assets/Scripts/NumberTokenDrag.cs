@@ -124,6 +124,8 @@ public class NumberTokenDrag : MonoBehaviour
             else
             {
                 pointerPressed = false;
+                TutorialTooltipController.FindOrCreate()
+                    .OnNumberClicked(numberToken);
                 numberToken.ToggleSelected();
             }
         }
@@ -156,6 +158,11 @@ public class NumberTokenDrag : MonoBehaviour
         Vector3 position = ScreenToWorld(screenPosition) + dragOffset;
         position.z = originalPosition.z;
         transform.position = position;
+
+        if (stampingArea != null && stampingArea.OverlapPoint(position))
+        {
+            TutorialTooltipController.FindOrCreate().OnEnteredStampingArea();
+        }
     }
 
     private void EndDrag()
@@ -174,6 +181,7 @@ public class NumberTokenDrag : MonoBehaviour
 
         if (stampingArea != null && stampingArea.OverlapPoint(dropPosition))
         {
+            TutorialTooltipController.FindOrCreate().OnEnteredStampingArea();
             EnableDynamicPhysics();
             Debug.Log($"数字 {numberToken.Value} 已放入冲压区。", numberToken);
         }

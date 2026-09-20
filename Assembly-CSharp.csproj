@@ -54,6 +54,7 @@
     <Compile Include="Assets\Scripts\StampingMachineMoveClick.cs" />
     <Compile Include="Assets\Scripts\StampOperationDisplay.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark02.cs" />
+    <Compile Include="Assets\Scripts\TutorialTooltipController.cs" />
     <Compile Include="Assets\Scripts\Manager\TestMove.cs" />
     <Compile Include="Assets\Scripts\MiningMachineWaitingArea.cs" />
     <Compile Include="Assets\Scripts\MiningMachinePowerSystem.cs" />

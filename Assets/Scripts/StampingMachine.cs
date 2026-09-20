@@ -497,6 +497,8 @@ public class StampingMachine : MonoBehaviour
             settlementArea.PrepareForDelivery(resultToken);
         }
 
+        TutorialTooltipController.FindOrCreate().OnFirstNumberCombined();
+
         // The result is intentionally left in the stamping area for the
         // player to drag away. It must not physically block the press while
         // the press returns to its initial position.
