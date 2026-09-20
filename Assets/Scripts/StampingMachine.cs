@@ -52,6 +52,10 @@ public class StampingMachine : MonoBehaviour
     [SerializeField, Min(0.01f)] private float returnSpeed = 5f;
     [SerializeField, Min(0.01f)] private float tokenConvergenceDuration = 0.35f;
 
+    [Header("冲压音效")]
+    [Tooltip("按下冲压后延迟多少秒才播放冲压工作音效。填 0 表示立即播放，与原有行为完全一致。")]
+    [SerializeField, Min(0f)] private float stampingAudioDelay = 0f;
+
     [Header("冲压下行模式")]
     [SerializeField] private StampMoveMode descendMode = StampMoveMode.ConstantSpeed;
     [Header("缓动下行参数（仅缓动模式生效）")]
@@ -86,6 +90,7 @@ public class StampingMachine : MonoBehaviour
     private float descendStartY;
     private float descendTargetY;
     private float descendElapsed;
+    private Coroutine stampingWorkAudioCoroutine;
     private Collider2D[] pressColliders;
     private readonly List<Collider2D> ignoredTokenColliders = new List<Collider2D>();
 
@@ -289,7 +294,7 @@ public class StampingMachine : MonoBehaviour
             ? Vector2.zero
             : Vector2.down * moveSpeed;
 
-        GameAudioManager.Instance?.PlayStampingWork();
+        PlayStampingWorkWithDelay();
         Debug.Log($"冲压机开始下压，运算方式：{operation}。", this);
     }
 
@@ -308,16 +313,20 @@ public class StampingMachine : MonoBehaviour
             return;
         }
 
-        if (TryGetDescendTargetY(out float targetY))
+        // A target that is not below the start would make the curve drive the
+        // press upwards. That happens when the press already rests on the anvil
+        // or the scene is misconfigured, and constant speed handles it correctly
+        // by colliding immediately, so treat it the same as a missing target.
+        if (!TryGetDescendTargetY(out float targetY) || targetY >= descendStartY)
         {
-            descendTargetY = targetY;
-            useEasingDescend = true;
+            Debug.LogWarning(
+                "缓动下行找不到有效终点（缺少砧板或冲压锤 Collider，或冲压锤已经贴在砧板上），本次回退为恒定速度下行。",
+                this);
             return;
         }
 
-        Debug.LogWarning(
-            "缓动下行无法推算出终点（缺少砧板或冲压锤 Collider），本次回退为恒定速度下行。",
-            this);
+        descendTargetY = targetY;
+        useEasingDescend = true;
     }
 
     /// <summary>
@@ -404,6 +413,43 @@ public class StampingMachine : MonoBehaviour
 
         pressBody.linearVelocity =
             new Vector2(0f, (targetY - pressBody.position.y) / Time.fixedDeltaTime);
+    }
+
+    /// <summary>
+    /// Starts the stamping sound effect, optionally after the delay configured
+    /// in the Inspector. A delay of 0 plays it immediately, which is exactly
+    /// the original behaviour.
+    /// </summary>
+    private void PlayStampingWorkWithDelay()
+    {
+        if (stampingAudioDelay <= 0f)
+        {
+            GameAudioManager.Instance?.PlayStampingWork();
+            return;
+        }
+
+        if (stampingWorkAudioCoroutine != null)
+        {
+            StopCoroutine(stampingWorkAudioCoroutine);
+        }
+
+        stampingWorkAudioCoroutine = StartCoroutine(PlayStampingWorkAfterDelay());
+    }
+
+    private IEnumerator PlayStampingWorkAfterDelay()
+    {
+        yield return new WaitForSeconds(stampingAudioDelay);
+
+        // A press cycle can be over before the delay elapses: an early anvil
+        // contact, a descent shorter than the delay, or a round reset. Starting
+        // the machine sound after the machine has already stopped would sound
+        // detached, so it is skipped in that case.
+        if (isMoving || isReturning || isConvergingTokens)
+        {
+            GameAudioManager.Instance?.PlayStampingWork();
+        }
+
+        stampingWorkAudioCoroutine = null;
     }
 
     private void OnCollisionEnter2D(Collision2D collision)
@@ -867,6 +913,9 @@ public class StampingMachine : MonoBehaviour
         descendElapsed = 0f;
         descendStartY = initialPosition.y;
         descendTargetY = initialPosition.y;
+        // StopAllCoroutines above already kills any pending sound; clear the
+        // handle so the next cycle does not hold a dead reference.
+        stampingWorkAudioCoroutine = null;
         pressBody.linearVelocity = Vector2.zero;
         pressBody.position = initialPosition;
         pressBody.gravityScale = 0f;
