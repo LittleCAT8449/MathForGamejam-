@@ -10,15 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: db8b6761aa944fd2bf7243aa57dfa161, type: 3}
-  m_Name: Level4
+  m_Name: Level7
   m_EditorClassIdentifier: 
   levelId: level_04
   displayName: "\u7B2C 4 \u5173"
   targetNumber: 8
   targetNumbers:
-  - 9
+  - 85
   rewards:
-  - rewardId: 4
-    rewardType: 0
-    operation: 2
+  - rewardId: 7
+    rewardType: 1
+    operation: 3
     machinePrefab: {fileID: 0}

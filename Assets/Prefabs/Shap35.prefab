@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 9205870907869887441}
   - component: {fileID: 1357134379307912358}
   m_Layer: 0
-  m_Name: Shap10-1
+  m_Name: Shap35
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -99,7 +99,7 @@ MonoBehaviour:
   waitingArea: {fileID: 0}
   footprintSize: {x: 1, y: 1}
   autoFootprintFromShape: 1
-  productionNumber: 10
+  productionNumber: 35
 --- !u!1 &7237207179979603820
 GameObject:
   m_ObjectHideFlags: 0
@@ -129,7 +129,7 @@ Transform:
   m_GameObject: {fileID: 7237207179979603820}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -7, y: -5, z: 0}
+  m_LocalPosition: {x: -2, y: -2, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -277,7 +277,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   tilemap: {fileID: 8161513565689129027}
   tile: {fileID: 11400000, guid: 6d2c3e3e4f214fdc949d5b7372e38c6c, type: 2}
-  shapeData: {fileID: 11400000, guid: 1b844d40e43b19c4fbf4f1fc6b9c82d2, type: 2}
+  shapeData: {fileID: 11400000, guid: d949f86cf73e86748b2a7bd31f1fc9e9, type: 2}
   tilemapOrigin: {x: 0, y: 0}
   centerOnMachinePivot: 1
   generateOnAwake: 1
