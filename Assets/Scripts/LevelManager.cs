@@ -88,7 +88,20 @@ public class LevelManager : MonoBehaviour
 
         if (loadStartingLevelOnAwake)
         {
-            LoadLevel(startingLevelIndex);
+            // Continue from the highest level unlocked in the saved progress.
+            // A fresh save still starts at startingLevelIndex (normally 0),
+            // while a player who already completed level 1 opens level 2 and
+            // can use the newly unlocked operations there.
+            int savedLevelIndex = progress != null
+                ? progress.highestUnlockedLevelIndex
+                : startingLevelIndex;
+            int levelToLoad = Mathf.Max(startingLevelIndex, savedLevelIndex);
+            if (levels != null && levels.Count > 0)
+            {
+                levelToLoad = Mathf.Clamp(levelToLoad, 0, levels.Count - 1);
+            }
+
+            LoadLevel(levelToLoad);
         }
     }
 
@@ -114,6 +127,11 @@ public class LevelManager : MonoBehaviour
             settlementArea.NumberPlaced += HandleNumberPlaced;
         }
 
+        // Re-apply rewards for levels that were completed before a reward was
+        // added or changed in the LevelConfig asset. This also repairs saves
+        // created by an older build that recorded completion without adding
+        // the operation to unlockedOperations.
+        SyncRewardsForCompletedLevels();
         SyncUnlockedMachineRewards();
 
         if (levels.Count == 0)
@@ -205,18 +223,10 @@ public class LevelManager : MonoBehaviour
 
     public bool IsOperationAvailable(StampOperation operation)
     {
-        if (progress == null || !progress.unlockedOperations.Contains(operation))
-        {
-            return false;
-        }
-
-        if (currentLevel == null || currentLevel.AllowedOperations == null ||
-            currentLevel.AllowedOperations.Count == 0)
-        {
-            return true;
-        }
-
-        return currentLevel.AllowedOperations.Contains(operation);
+        // Operation availability is global and permanent. Once a reward has
+        // unlocked an operation, every level can use it.
+        return progress != null &&
+               progress.unlockedOperations.Contains(operation);
     }
 
     public bool HasReward(string rewardId)
@@ -306,6 +316,7 @@ public class LevelManager : MonoBehaviour
     {
         LoadProgress();
         UpdateTargetLabel();
+        SyncRewardsForCompletedLevels();
         SyncUnlockedMachineRewards();
     }
 
@@ -464,7 +475,7 @@ public class LevelManager : MonoBehaviour
         {
             for (int i = 0; i < currentLevel.Rewards.Count; i++)
             {
-                GrantReward(currentLevel.Rewards[i], i);
+                GrantReward(currentLevel, currentLevel.Rewards[i], i);
             }
         }
 
@@ -563,19 +574,54 @@ public class LevelManager : MonoBehaviour
         }
     }
 
-    private void GrantReward(LevelRewardConfig reward, int rewardIndex)
+    private bool SyncRewardsForCompletedLevels()
     {
-        if (reward == null)
+        if (progress == null || levels == null)
         {
-            return;
+            return false;
+        }
+
+        bool changed = false;
+        foreach (LevelConfig level in levels)
+        {
+            if (level == null ||
+                !progress.completedLevelIds.Contains(level.LevelId) ||
+                level.Rewards == null)
+            {
+                continue;
+            }
+
+            for (int rewardIndex = 0; rewardIndex < level.Rewards.Count; rewardIndex++)
+            {
+                changed |= GrantReward(level, level.Rewards[rewardIndex], rewardIndex);
+            }
+        }
+
+        if (changed)
+        {
+            OperationAvailabilityChanged?.Invoke();
+            SaveProgress();
+            Debug.Log("已同步已通关关卡的奖励，运算解锁状态已更新。", this);
+        }
+
+        return changed;
+    }
+
+    private bool GrantReward(LevelConfig level, LevelRewardConfig reward, int rewardIndex)
+    {
+        if (level == null || reward == null || progress == null)
+        {
+            return false;
         }
 
         string rewardId = reward.GetPersistentId(
-            currentLevel.LevelId,
+            level.LevelId,
             rewardIndex);
+        bool changed = false;
         if (!progress.unlockedRewardIds.Contains(rewardId))
         {
             progress.unlockedRewardIds.Add(rewardId);
+            changed = true;
         }
 
         switch (reward.RewardType)
@@ -584,29 +630,38 @@ public class LevelManager : MonoBehaviour
                 if (!progress.unlockedOperations.Contains(reward.Operation))
                 {
                     progress.unlockedOperations.Add(reward.Operation);
+                    changed = true;
+                    Debug.Log($"永久解锁运算：{reward.Operation}。", this);
                 }
-
-                Debug.Log($"永久解锁运算：{reward.Operation}。", this);
                 break;
             case LevelRewardType.UnlockNegativeSubtraction:
-                progress.negativeSubtractUnlocked = true;
-                Debug.Log("永久解锁减法负数模式。", this);
+                if (!progress.negativeSubtractUnlocked)
+                {
+                    progress.negativeSubtractUnlocked = true;
+                    changed = true;
+                    Debug.Log("永久解锁减法负数模式。", this);
+                }
                 break;
             case LevelRewardType.UnlockPositiveSubtraction:
                 if (!progress.unlockedOperations.Contains(StampOperation.Subtract))
                 {
                     progress.unlockedOperations.Add(StampOperation.Subtract);
+                    changed = true;
+                    Debug.Log("永久解锁减法正数模式。", this);
                 }
-
-                Debug.Log("永久解锁减法正数模式。", this);
                 break;
             case LevelRewardType.UnlockMiningMachine:
-                string machineName = reward.MachinePrefab != null
-                    ? reward.MachinePrefab.name
-                    : rewardId;
-                Debug.Log($"永久解锁采矿机：{machineName}。", this);
+                if (changed)
+                {
+                    string machineName = reward.MachinePrefab != null
+                        ? reward.MachinePrefab.name
+                        : rewardId;
+                    Debug.Log($"永久解锁采矿机：{machineName}。", this);
+                }
                 break;
         }
+
+        return changed;
     }
 
     private void LoadProgress()

@@ -16,7 +16,6 @@ MonoBehaviour:
   displayName: "\u7B2C 2\u5173"
   targetNumber: 8
   targetNumbers: []
-  allowedOperations: 00000000
   rewards:
   - rewardId: 1
     rewardType: 2

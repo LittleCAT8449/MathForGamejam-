@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -21,9 +22,47 @@ public class StampOperationSelector : MonoBehaviour
     [SerializeField] private Button multiplyButton;
     [SerializeField] private Button divideButton;
 
+    private Sprite addButtonSprite;
+    private Sprite subtractButtonSprite;
+    private Sprite multiplyButtonSprite;
+    private Sprite divideButtonSprite;
+    private Color addButtonColor = Color.white;
+    private Color subtractButtonColor = Color.white;
+    private Color multiplyButtonColor = Color.white;
+    private Color divideButtonColor = Color.white;
+    private bool buttonSpritesCached;
+
+    // The scene currently contains one selector component on each operation
+    // button. A selector can clear another button before the next selector
+    // caches it, so keep the original graphics shared by all selectors.
+    private static readonly Dictionary<int, Sprite> OriginalButtonSprites =
+        new Dictionary<int, Sprite>();
+    private static readonly Dictionary<int, Color> OriginalButtonColors =
+        new Dictionary<int, Color>();
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetButtonGraphicCache()
+    {
+        OriginalButtonSprites.Clear();
+        OriginalButtonColors.Clear();
+    }
+
     [Header("减法模式显示")]
     [Tooltip("显示当前减法模式，例如：正数模式（大数-小数）。")]
     [SerializeField] private TMP_Text subtractModeLabel;
+    [Tooltip("选择加法、乘法或除法时隐藏减法模式文字。")]
+    [SerializeField] private bool hideLabelWhenNotSubtract = true;
+    [SerializeField] private string positiveSubtractModeText =
+        "正数模式（大数 - 小数）";
+    [SerializeField] private string negativeSubtractModeText =
+        "负数模式（小数 - 大数）";
+    [SerializeField] private string negativeModeLockedText =
+        "\n负数模式未解锁";
+
+    private StampOperation lastLabelOperation;
+    private bool lastLabelNegativeMode;
+    private bool lastLabelNegativeUnlocked;
+    private bool hasRefreshedLabel;
 
     private void Awake()
     {
@@ -42,6 +81,7 @@ public class StampOperationSelector : MonoBehaviour
             uiObjectToClose = gameObject;
         }
 
+        CacheButtonSprites();
         RefreshButtons();
         RefreshSubtractModeLabel();
     }
@@ -57,6 +97,34 @@ public class StampOperationSelector : MonoBehaviour
 
         RefreshButtons();
         RefreshSubtractModeLabel();
+    }
+
+    private void Update()
+    {
+        if (stampingMachine == null)
+        {
+            stampingMachine = FindFirstObjectByType<StampingMachine>();
+        }
+
+        if (levelManager == null)
+        {
+            levelManager = FindFirstObjectByType<LevelManager>();
+        }
+
+        if (stampingMachine == null)
+        {
+            return;
+        }
+
+        bool negativeUnlocked = levelManager != null &&
+                                levelManager.IsNegativeSubtractUnlocked;
+        if (!hasRefreshedLabel ||
+            lastLabelOperation != stampingMachine.Operation ||
+            lastLabelNegativeMode != stampingMachine.IsNegativeSubtractMode ||
+            lastLabelNegativeUnlocked != negativeUnlocked)
+        {
+            RefreshSubtractModeLabel();
+        }
     }
 
     private void OnEnable()
@@ -185,28 +253,38 @@ public class StampOperationSelector : MonoBehaviour
     /// </summary>
     public void RefreshButtons()
     {
+        CacheButtonSprites();
+
         if (levelManager == null)
         {
-            SetButtonInteractable(addButton, true);
-            SetButtonInteractable(subtractButton, true);
-            SetButtonInteractable(multiplyButton, true);
-            SetButtonInteractable(divideButton, true);
+            RefreshButton(addButton, true, addButtonSprite, addButtonColor);
+            RefreshButton(subtractButton, true, subtractButtonSprite, subtractButtonColor);
+            RefreshButton(multiplyButton, true, multiplyButtonSprite, multiplyButtonColor);
+            RefreshButton(divideButton, true, divideButtonSprite, divideButtonColor);
             RefreshSubtractModeLabel();
             return;
         }
 
-        SetButtonInteractable(
+        RefreshButton(
             addButton,
-            levelManager.IsOperationAvailable(StampOperation.Add));
-        SetButtonInteractable(
+            levelManager.IsOperationAvailable(StampOperation.Add),
+            addButtonSprite,
+            addButtonColor);
+        RefreshButton(
             subtractButton,
-            levelManager.IsOperationAvailable(StampOperation.Subtract));
-        SetButtonInteractable(
+            levelManager.IsOperationAvailable(StampOperation.Subtract),
+            subtractButtonSprite,
+            subtractButtonColor);
+        RefreshButton(
             multiplyButton,
-            levelManager.IsOperationAvailable(StampOperation.Multiply));
-        SetButtonInteractable(
+            levelManager.IsOperationAvailable(StampOperation.Multiply),
+            multiplyButtonSprite,
+            multiplyButtonColor);
+        RefreshButton(
             divideButton,
-            levelManager.IsOperationAvailable(StampOperation.Divide));
+            levelManager.IsOperationAvailable(StampOperation.Divide),
+            divideButtonSprite,
+            divideButtonColor);
 
         RefreshSubtractModeLabel();
     }
@@ -248,19 +326,58 @@ public class StampOperationSelector : MonoBehaviour
             return;
         }
 
+        if (stampingMachine == null)
+        {
+            stampingMachine = FindFirstObjectByType<StampingMachine>();
+        }
+
+        if (levelManager == null)
+        {
+            levelManager = FindFirstObjectByType<LevelManager>();
+        }
+
+        if (stampingMachine == null)
+        {
+            subtractModeLabel.text = string.Empty;
+            return;
+        }
+
+        if (hideLabelWhenNotSubtract &&
+            stampingMachine.Operation != StampOperation.Subtract)
+        {
+            subtractModeLabel.text = string.Empty;
+            CacheDisplayedLabelState();
+            return;
+        }
+
         bool negativeMode = stampingMachine != null &&
                             stampingMachine.IsNegativeSubtractMode;
         string modeText = negativeMode
-            ? "负数模式（小数 - 大数）"
-            : "正数模式（大数 - 小数）";
+            ? negativeSubtractModeText
+            : positiveSubtractModeText;
 
         if (!negativeMode && levelManager != null &&
             !levelManager.IsNegativeSubtractUnlocked)
         {
-            modeText += "\n负数模式未解锁";
+            modeText += negativeModeLockedText;
         }
 
         subtractModeLabel.text = $"减法：{modeText}";
+        CacheDisplayedLabelState();
+    }
+
+    private void CacheDisplayedLabelState()
+    {
+        if (stampingMachine == null)
+        {
+            return;
+        }
+
+        lastLabelOperation = stampingMachine.Operation;
+        lastLabelNegativeMode = stampingMachine.IsNegativeSubtractMode;
+        lastLabelNegativeUnlocked = levelManager != null &&
+                                    levelManager.IsNegativeSubtractUnlocked;
+        hasRefreshedLabel = true;
     }
 
     private string GetSubtractModeName()
@@ -275,6 +392,78 @@ public class StampOperationSelector : MonoBehaviour
         if (button != null)
         {
             button.interactable = interactable;
+        }
+    }
+
+    private void CacheButtonSprites()
+    {
+        if (buttonSpritesCached)
+        {
+            return;
+        }
+
+        addButtonSprite = GetButtonSprite(addButton);
+        subtractButtonSprite = GetButtonSprite(subtractButton);
+        multiplyButtonSprite = GetButtonSprite(multiplyButton);
+        divideButtonSprite = GetButtonSprite(divideButton);
+        addButtonColor = GetButtonColor(addButton);
+        subtractButtonColor = GetButtonColor(subtractButton);
+        multiplyButtonColor = GetButtonColor(multiplyButton);
+        divideButtonColor = GetButtonColor(divideButton);
+        buttonSpritesCached = true;
+    }
+
+    private static Sprite GetButtonSprite(Button button)
+    {
+        if (button == null || button.image == null)
+        {
+            return null;
+        }
+
+        int instanceId = button.GetInstanceID();
+        if (!OriginalButtonSprites.ContainsKey(instanceId))
+        {
+            OriginalButtonSprites.Add(instanceId, button.image.sprite);
+        }
+
+        return OriginalButtonSprites[instanceId];
+    }
+
+    private static Color GetButtonColor(Button button)
+    {
+        if (button == null || button.image == null)
+        {
+            return Color.white;
+        }
+
+        int instanceId = button.GetInstanceID();
+        if (!OriginalButtonColors.ContainsKey(instanceId))
+        {
+            OriginalButtonColors.Add(instanceId, button.image.color);
+        }
+
+        return OriginalButtonColors[instanceId];
+    }
+
+    private void RefreshButton(
+        Button button,
+        bool operationAvailable,
+        Sprite originalSprite,
+        Color originalColor)
+    {
+        if (button == null)
+        {
+            return;
+        }
+
+        SetButtonInteractable(button, operationAvailable);
+
+        if (button.image != null)
+        {
+            button.image.sprite = operationAvailable ? originalSprite : null;
+            button.image.color = operationAvailable
+                ? originalColor
+                : new Color(originalColor.r, originalColor.g, originalColor.b, 0f);
         }
     }
 

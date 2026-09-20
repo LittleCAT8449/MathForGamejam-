@@ -18,7 +18,6 @@ MonoBehaviour:
   targetNumbers:
   - 20
   - 3
-  allowedOperations: 00000000
   rewards:
   - rewardId: 3
     rewardType: 0

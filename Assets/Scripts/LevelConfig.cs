@@ -67,9 +67,6 @@ public class LevelConfig : ScriptableObject
     [Tooltip("按顺序添加本关需要交付的所有数字，支持整数和小数。旧关卡留空时会使用原来的单目标字段。")]
     [SerializeField] private List<string> targetNumbers =
         new List<string>();
-    [Tooltip("留空表示使用玩家已经解锁的全部运算。")]
-    [SerializeField] private List<StampOperation> allowedOperations =
-        new List<StampOperation>();
     [SerializeField] private List<LevelRewardConfig> rewards =
         new List<LevelRewardConfig>();
 
@@ -79,7 +76,6 @@ public class LevelConfig : ScriptableObject
     public string DisplayName => displayName;
     public string TargetNumberText => GetTargetNumberTexts()[0];
     public string TargetNumbersText => string.Join("、", GetTargetNumberTexts());
-    public IReadOnlyList<StampOperation> AllowedOperations => allowedOperations;
     public IReadOnlyList<LevelRewardConfig> Rewards => rewards;
 
     public bool TryGetTargets(List<decimal> targets)
@@ -124,24 +120,9 @@ public class LevelConfig : ScriptableObject
             levelId = name;
         }
 
-        if (allowedOperations == null)
-        {
-            allowedOperations = new List<StampOperation>();
-        }
-
         if (targetNumbers == null)
         {
             targetNumbers = new List<string>();
-        }
-
-        HashSet<StampOperation> uniqueOperations =
-            new HashSet<StampOperation>();
-        for (int i = allowedOperations.Count - 1; i >= 0; i--)
-        {
-            if (!uniqueOperations.Add(allowedOperations[i]))
-            {
-                allowedOperations.RemoveAt(i);
-            }
         }
 
         if (rewards == null)
