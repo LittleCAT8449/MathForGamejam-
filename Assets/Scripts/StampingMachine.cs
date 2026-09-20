@@ -11,6 +11,30 @@ public enum StampOperation
 }
 
 /// <summary>
+/// How the press travels from its initial position down to the anvil.
+/// </summary>
+public enum StampMoveMode
+{
+    /// <summary>Original behaviour: constant moveSpeed, stops on the anvil collision.</summary>
+    ConstantSpeed,
+
+    /// <summary>a * x^b easing over a fixed duration, stops when the curve ends.</summary>
+    Easing
+}
+
+/// <summary>
+/// How consumed number tokens travel toward their convergence point.
+/// </summary>
+public enum StampConvergeMode
+{
+    /// <summary>Original behaviour: piecewise quadratic ease-in/ease-out.</summary>
+    PiecewiseQuadratic,
+
+    /// <summary>a * x^b easing over tokenConvergenceDuration.</summary>
+    PowerEasing
+}
+
+/// <summary>
 /// Attach to the moving press. Call Move() to descend until it contacts the anvil.
 /// Number tokens touched along the way are consumed in contact order.
 /// </summary>
@@ -28,6 +52,24 @@ public class StampingMachine : MonoBehaviour
     [SerializeField, Min(0.01f)] private float returnSpeed = 5f;
     [SerializeField, Min(0.01f)] private float tokenConvergenceDuration = 0.35f;
 
+    [Header("冲压下行模式")]
+    [SerializeField] private StampMoveMode descendMode = StampMoveMode.ConstantSpeed;
+    [Header("缓动下行参数（仅缓动模式生效）")]
+    [Tooltip("缓动模式下冲压锤从起点走完终点所用的时间，单位为秒。")]
+    [SerializeField, Min(0.01f)] private float descendDuration = 0.5f;
+    [Tooltip("缓动系数 a，进度 = a * x^b。通常填 1，此时进度终点正好为 1。")]
+    [SerializeField] private float descendEasingA = 1f;
+    [Tooltip("缓动系数 b，进度 = a * x^b。b=1 线性，b>1 先慢后快，b<1 先快后慢。")]
+    [SerializeField] private float descendEasingB = 1f;
+
+    [Header("数字合并模式")]
+    [SerializeField] private StampConvergeMode convergeMode = StampConvergeMode.PiecewiseQuadratic;
+    [Header("合并缓动参数（仅幂缓动模式生效）")]
+    [Tooltip("缓动系数 a，进度 = a * x^b。通常填 1，此时进度终点正好为 1。")]
+    [SerializeField] private float convergeEasingA = 1f;
+    [Tooltip("缓动系数 b，进度 = a * x^b。b=1 线性，b>1 先慢后快，b<1 先快后慢。")]
+    [SerializeField] private float convergeEasingB = 1f;
+
     private readonly HashSet<NumberToken> consumedTokens = new HashSet<NumberToken>();
     private readonly List<NumberToken> consumedTokenList = new List<NumberToken>();
     private Vector2 initialPosition;
@@ -40,6 +82,10 @@ public class StampingMachine : MonoBehaviour
     private bool isMoving;
     private bool isReturning;
     private bool isConvergingTokens;
+    private bool useEasingDescend;
+    private float descendStartY;
+    private float descendTargetY;
+    private float descendElapsed;
     private Collider2D[] pressColliders;
     private readonly List<Collider2D> ignoredTokenColliders = new List<Collider2D>();
 
@@ -165,7 +211,17 @@ public class StampingMachine : MonoBehaviour
     {
         if (isMoving)
         {
-            ConsumeOverlappingTokens();
+            if (useEasingDescend)
+            {
+                UpdateEasingDescend();
+            }
+
+            // UpdateEasingDescend can finish the cycle on its own, so only look
+            // for tokens while the press is still descending.
+            if (isMoving)
+            {
+                ConsumeOverlappingTokens();
+            }
         }
 
         if (!isReturning)
@@ -224,10 +280,130 @@ public class StampingMachine : MonoBehaviour
         pressBody.constraints |= RigidbodyConstraints2D.FreezePositionX |
                                  RigidbodyConstraints2D.FreezeRotation;
         pressBody.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-        pressBody.linearVelocity = Vector2.down * moveSpeed;
+
+        PrepareDescendMotion();
+
+        // In easing mode the curve produces the velocity on the first physics
+        // step, so the press starts from rest instead of a constant speed.
+        pressBody.linearVelocity = useEasingDescend
+            ? Vector2.zero
+            : Vector2.down * moveSpeed;
 
         GameAudioManager.Instance?.PlayStampingWork();
         Debug.Log($"冲压机开始下压，运算方式：{operation}。", this);
+    }
+
+    /// <summary>
+    /// Resolves the easing target for this press cycle. Falls back to constant
+    /// speed when the anvil or the press colliders cannot provide a target.
+    /// </summary>
+    private void PrepareDescendMotion()
+    {
+        descendElapsed = 0f;
+        descendStartY = pressBody.position.y;
+        useEasingDescend = false;
+
+        if (descendMode != StampMoveMode.Easing)
+        {
+            return;
+        }
+
+        if (TryGetDescendTargetY(out float targetY))
+        {
+            descendTargetY = targetY;
+            useEasingDescend = true;
+            return;
+        }
+
+        Debug.LogWarning(
+            "缓动下行无法推算出终点（缺少砧板或冲压锤 Collider），本次回退为恒定速度下行。",
+            this);
+    }
+
+    /// <summary>
+    /// Computes the Y position at which the bottom of the press just touches
+    /// the top of the anvil collider.
+    /// </summary>
+    private bool TryGetDescendTargetY(out float targetY)
+    {
+        targetY = 0f;
+
+        if (anvilCollider == null)
+        {
+            return false;
+        }
+
+        if (pressColliders == null || pressColliders.Length == 0)
+        {
+            pressColliders = GetComponentsInChildren<Collider2D>(true);
+        }
+
+        float pressBottom = float.PositiveInfinity;
+        bool hasSolidBottom = false;
+        float anyBottom = float.PositiveInfinity;
+        bool hasAnyBottom = false;
+
+        foreach (Collider2D pressCollider in pressColliders)
+        {
+            if (pressCollider == null)
+            {
+                continue;
+            }
+
+            anyBottom = Mathf.Min(anyBottom, pressCollider.bounds.min.y);
+            hasAnyBottom = true;
+
+            // Trigger colliders never stop the press, so they must not decide
+            // where the descent ends.
+            if (pressCollider.isTrigger)
+            {
+                continue;
+            }
+
+            pressBottom = Mathf.Min(pressBottom, pressCollider.bounds.min.y);
+            hasSolidBottom = true;
+        }
+
+        if (!hasSolidBottom)
+        {
+            if (!hasAnyBottom)
+            {
+                return false;
+            }
+
+            pressBottom = anyBottom;
+        }
+
+        float bottomOffset = pressBody.position.y - pressBottom;
+        targetY = anvilCollider.bounds.max.y + bottomOffset;
+        return true;
+    }
+
+    /// <summary>
+    /// Advances the eased descent by one physics step. The curve drives the
+    /// rigidbody through linearVelocity so the anvil collision callback,
+    /// IsAnvil and StopAtAnvil keep working exactly as in constant speed mode.
+    /// </summary>
+    private void UpdateEasingDescend()
+    {
+        float duration = Mathf.Max(0.01f, descendDuration);
+        descendElapsed += Time.fixedDeltaTime;
+
+        float normalizedTime = Mathf.Clamp01(descendElapsed / duration);
+        float progress = EvaluatePowerEasing(descendEasingA, descendEasingB, normalizedTime);
+        float targetY = Mathf.Lerp(descendStartY, descendTargetY, progress);
+
+        if (normalizedTime >= 1f)
+        {
+            // The curve has run out. Land exactly on the target and finish the
+            // cycle through the same path the anvil collision would take.
+            pressBody.position = new Vector2(pressBody.position.x, targetY);
+            StopAtAnvil();
+            return;
+        }
+
+        pressBody.linearVelocity =
+            new Vector2(0f, (targetY - pressBody.position.y) / Time.fixedDeltaTime);
     }
 
     private void OnCollisionEnter2D(Collision2D collision)
@@ -394,8 +570,10 @@ public class StampingMachine : MonoBehaviour
         consumedTokenList.Add(token);
 
         // Contact with a token can change a dynamic body's velocity. Keep the
-        // press descending until the anvil is reached.
-        if (isMoving)
+        // press descending until the anvil is reached. In easing mode the
+        // velocity belongs to the curve and must not be overwritten here, but
+        // the semantic stays the same: touching a number never stops the press.
+        if (isMoving && !useEasingDescend)
         {
             pressBody.linearVelocity = Vector2.down * moveSpeed;
         }
@@ -433,7 +611,7 @@ public class StampingMachine : MonoBehaviour
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-            float progress = EvaluatePiecewiseQuadratic(elapsed / duration);
+            float progress = EvaluateConvergeProgress(elapsed / duration);
 
             for (int i = 0; i < tokens.Count; i++)
             {
@@ -482,6 +660,34 @@ public class StampingMachine : MonoBehaviour
         float secondHalf = (time - 0.5f) * 2f;
         float remaining = 1f - secondHalf;
         return 0.5f + 0.5f * (1f - remaining * remaining);
+    }
+
+    /// <summary>
+    /// Shared power easing: a * x^b, where x is normalized time in 0..1 and the
+    /// result is used directly as 0..1 progress. The press descent and the
+    /// token convergence both go through here, each with its own a and b.
+    /// Mathf.Lerp clamps the progress, so a value outside 0..1 cannot overshoot
+    /// past the target.
+    /// </summary>
+    private static float EvaluatePowerEasing(float a, float b, float normalizedTime)
+    {
+        float time = Mathf.Clamp01(normalizedTime);
+        float value = a * Mathf.Pow(time, b);
+
+        // A negative b at an exact time of 0 produces NaN or Infinity, which
+        // would otherwise be written straight into the rigidbody velocity.
+        return float.IsNaN(value) || float.IsInfinity(value) ? time : value;
+    }
+
+    /// <summary>
+    /// Picks the convergence curve for the token merge. The original piecewise
+    /// quadratic stays available and remains the default.
+    /// </summary>
+    private float EvaluateConvergeProgress(float normalizedTime)
+    {
+        return convergeMode == StampConvergeMode.PowerEasing
+            ? EvaluatePowerEasing(convergeEasingA, convergeEasingB, normalizedTime)
+            : EvaluatePiecewiseQuadratic(normalizedTime);
     }
 
     private void CreateResultToken()
@@ -657,6 +863,10 @@ public class StampingMachine : MonoBehaviour
         subtractModeInitialized = false;
         consumedTokens.Clear();
         consumedTokenList.Clear();
+        useEasingDescend = false;
+        descendElapsed = 0f;
+        descendStartY = initialPosition.y;
+        descendTargetY = initialPosition.y;
         pressBody.linearVelocity = Vector2.zero;
         pressBody.position = initialPosition;
         pressBody.gravityScale = 0f;

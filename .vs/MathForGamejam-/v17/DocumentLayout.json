@@ -1,0 +1,37 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\gitunity\\MathForGamejam-\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{99B05339-349F-D71E-63D2-1A042BE2443D}|Assembly-CSharp.csproj|d:\\gitunity\\mathforgamejam-\\assets\\scripts\\stampingmachine.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{99B05339-349F-D71E-63D2-1A042BE2443D}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\stampingmachine.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "StampingMachine.cs",
+              "DocumentMoniker": "D:\\gitunity\\MathForGamejam-\\Assets\\Scripts\\StampingMachine.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\StampingMachine.cs",
+              "ToolTip": "D:\\gitunity\\MathForGamejam-\\Assets\\Scripts\\StampingMachine.cs",
+              "RelativeToolTip": "Assets\\Scripts\\StampingMachine.cs",
+              "ViewState": "AgIAAF4DAAAAAAAAAAAuwGYDAAAtAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-20T07:34:41.132Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
