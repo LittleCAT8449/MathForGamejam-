@@ -16,9 +16,5 @@ MonoBehaviour:
   displayName: "\u7B2C 7 \u5173"
   targetNumber: 8
   targetNumbers:
-  - 85
-  rewards:
-  - rewardId: 7
-    rewardType: 1
-    operation: 3
-    machinePrefab: {fileID: 0}
+  - -9
+  rewards: []

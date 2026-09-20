@@ -20,6 +20,6 @@ MonoBehaviour:
   - 40
   rewards:
   - rewardId: 6
-    rewardType: 0
-    operation: 3
+    rewardType: 1
+    operation: 2
     machinePrefab: {fileID: 0}

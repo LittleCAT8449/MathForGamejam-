@@ -36,6 +36,8 @@ public class MiningMachineItem : MonoBehaviour
     private bool visualsCached;
     private bool isDeploymentPreview;
     private bool deploymentPreviewValid;
+    private Vector3 prefabLocalScale;
+    private bool prefabLocalScaleCaptured;
 
     public MiningMachineWaitingArea WaitingArea => waitingArea;
     public bool IsSelected { get; private set; }
@@ -80,8 +82,37 @@ public class MiningMachineItem : MonoBehaviour
     }
     public int ProductionNumber => Mathf.Max(0, productionNumber);
     public bool HasTilemapShape => GetComponentInChildren<CustomTilemapShape>(true) != null;
+    /// <summary>
+    /// The scale authored on the prefab (or scene instance). The waiting area
+    /// uses it as the baseline for display-size normalization so that repeated
+    /// page refreshes cannot accumulate scaling error.
+    /// </summary>
+    public Vector3 PrefabLocalScale
+    {
+        get
+        {
+            CapturePrefabLocalScale();
+            return prefabLocalScale;
+        }
+    }
     public MiningMachineDeploymentArea DeploymentArea { get; private set; }
     public Vector2Int BottomLeftCell { get; private set; }
+
+    /// <summary>
+    /// Records the prefab-authored scale once, before any display-size
+    /// normalization is applied. Awake order is not guaranteed, so this is
+    /// lazy and idempotent to keep the baseline stable.
+    /// </summary>
+    private void CapturePrefabLocalScale()
+    {
+        if (prefabLocalScaleCaptured)
+        {
+            return;
+        }
+
+        prefabLocalScale = transform.localScale;
+        prefabLocalScaleCaptured = true;
+    }
 
     /// <summary>
     /// Writes the cells that are physically occupied inside the machine's
@@ -303,6 +334,11 @@ public class MiningMachineItem : MonoBehaviour
     private void Awake()
     {
         CacheVisuals();
+
+        // Record the prefab-authored scale before the waiting area applies any
+        // display-size normalization, so repeated page refreshes always scale
+        // from the same baseline instead of compounding.
+        CapturePrefabLocalScale();
 
         if (waitingArea == null)
         {

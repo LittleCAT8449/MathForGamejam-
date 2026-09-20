@@ -51,6 +51,10 @@ public class MiningMachineWaitingArea : MonoBehaviour
     [Tooltip("启用后按待选区域 SpriteRenderer 的范围自动排列初始机器，避免 spawnParent 的缩放导致机器跑出区域。")]
     [SerializeField] private bool fitInitialMachinesToWaitingArea = true;
     [SerializeField, Min(0f)] private float initialLayoutPadding = 0.05f;
+    [Tooltip("启用后按目标尺寸统一待选区采矿机的显示大小，避免占地格数不同的机器看起来差别过大。只影响待选区的显示缩放，不改动开采网格的占地与部署尺寸。")]
+    [SerializeField] private bool normalizeWaitingMachineDisplaySize = true;
+    [Tooltip("归一化后每台采矿机在待选区的世界长边长度。占地 1x1 到 6x10 的机器都会缩放到这个长边，形状比例保持不变。")]
+    [SerializeField, Min(0.01f)] private float waitingMachineDisplayLongSide = 1.2f;
 
     [Header("待选区分页")]
     [Tooltip("每页最多显示的采矿机数量。配置生成点后，会自动受生成点数量限制。")]
@@ -550,6 +554,15 @@ public class MiningMachineWaitingArea : MonoBehaviour
 
     private void ArrangeInitialMachines(List<MiningMachineItem> spawnedMachines, int columns)
     {
+        // The fallback branch below measures renderer bounds before calling
+        // SetInitialMachineTransform, so normalize up front to keep that layout
+        // math consistent. The result is derived from the prefab baseline, so
+        // repeating it inside SetInitialMachineTransform is a no-op.
+        foreach (MiningMachineItem machine in spawnedMachines)
+        {
+            NormalizeWaitingMachineDisplaySize(machine);
+        }
+
         if (GetValidSpawnPointCount() > 0)
         {
             for (int i = 0; i < spawnedMachines.Count; i++)
@@ -641,6 +654,8 @@ public class MiningMachineWaitingArea : MonoBehaviour
             return;
         }
 
+        NormalizeWaitingMachineDisplaySize(machine);
+
         Transform fixedSpawnPoint = GetSpawnPointForSlot(slotIndex);
         if (fixedSpawnPoint != null)
         {
@@ -673,6 +688,101 @@ public class MiningMachineWaitingArea : MonoBehaviour
         worldPosition.z = machine.transform.position.z;
         machine.transform.position = worldPosition;
         machine.transform.rotation = origin.rotation;
+    }
+
+    /// <summary>
+    /// Scales a waiting machine so machines with very different footprints
+    /// (1x1 up to 6x10 cells) end up with a similar on-screen size. Only the
+    /// waiting area's display scale changes: the footprint, the mining-grid
+    /// deployment size and the power logic keep using the prefab scale.
+    /// </summary>
+    private void NormalizeWaitingMachineDisplaySize(MiningMachineItem machine)
+    {
+        if (!normalizeWaitingMachineDisplaySize || machine == null)
+        {
+            return;
+        }
+
+        Vector3 baseline = machine.PrefabLocalScale;
+        if (baseline.x <= 0f || baseline.y <= 0f)
+        {
+            return;
+        }
+
+        Transform parent = machine.transform.parent;
+        Vector3 parentScale = parent != null ? parent.lossyScale : Vector3.one;
+
+        if (!TryGetUnitVisualSize(machine, out Vector2 unitVisualSize))
+        {
+            return;
+        }
+
+        // Unit size is expressed in machine-root space and is independent of
+        // the root scale, so the factor is always derived from the authoring
+        // baseline. Repeated calls therefore converge instead of compounding.
+        float worldWidth = Mathf.Abs(unitVisualSize.x * baseline.x * parentScale.x);
+        float worldHeight = Mathf.Abs(unitVisualSize.y * baseline.y * parentScale.y);
+        float longSide = Mathf.Max(worldWidth, worldHeight);
+        if (longSide <= Mathf.Epsilon)
+        {
+            return;
+        }
+
+        float factor = waitingMachineDisplayLongSide / longSide;
+        machine.transform.localScale = new Vector3(
+            baseline.x * factor,
+            baseline.y * factor,
+            baseline.z);
+    }
+
+    /// <summary>
+    /// Returns the machine's visual size in machine-root space at a root scale
+    /// of 1. Tilemap machines cover one cell per footprint cell; single-Sprite
+    /// machines use the sprite bounds scaled relative to the machine root. The
+    /// result never depends on the root scale, which keeps normalization
+    /// idempotent.
+    /// </summary>
+    private static bool TryGetUnitVisualSize(
+        MiningMachineItem machine,
+        out Vector2 unitVisualSize)
+    {
+        unitVisualSize = Vector2.one;
+
+        if (machine.HasTilemapShape)
+        {
+            Vector2Int footprint = machine.FootprintSize;
+            Grid grid = machine.GetComponentInChildren<Grid>(true);
+            Vector3 cellSize = grid != null ? grid.cellSize : Vector3.one;
+            unitVisualSize = new Vector2(
+                Mathf.Abs(footprint.x * cellSize.x),
+                Mathf.Abs(footprint.y * cellSize.y));
+            return unitVisualSize.x > 0f && unitVisualSize.y > 0f;
+        }
+
+        SpriteRenderer spriteRenderer =
+            machine.GetComponentInChildren<SpriteRenderer>(true);
+        if (spriteRenderer == null || spriteRenderer.sprite == null)
+        {
+            return false;
+        }
+
+        Vector3 spriteSize = spriteRenderer.sprite.bounds.size;
+        Vector3 machineLossy = machine.transform.lossyScale;
+        Vector3 spriteLossy = spriteRenderer.transform.lossyScale;
+
+        // Both scales shrink or grow together with the machine root, so the
+        // ratio stays valid no matter how many times this runs.
+        float relativeX = Mathf.Abs(machineLossy.x) > Mathf.Epsilon
+            ? spriteLossy.x / machineLossy.x
+            : 1f;
+        float relativeY = Mathf.Abs(machineLossy.y) > Mathf.Epsilon
+            ? spriteLossy.y / machineLossy.y
+            : 1f;
+
+        unitVisualSize = new Vector2(
+            Mathf.Abs(spriteSize.x * relativeX),
+            Mathf.Abs(spriteSize.y * relativeY));
+        return unitVisualSize.x > 0f && unitVisualSize.y > 0f;
     }
 
     private bool TryGetMachineVisualBounds(MiningMachineItem machine, out Bounds bounds)
